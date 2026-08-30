@@ -10,6 +10,7 @@ data class InspectionTemplate(
     val description: String? = null,
     val apparatusType: String, // Matches Apparatus.type
     val version: Int = 1,
+    val frequencyHours: Int = 24,
     val isActive: Boolean = true,
     val items: List<InspectionTemplateItem> = emptyList(),
     val createdAt: Long = 0,

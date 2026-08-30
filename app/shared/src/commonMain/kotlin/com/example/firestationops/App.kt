@@ -31,18 +31,43 @@ import firestationops.app.shared.generated.resources.compose_multiplatform
 import com.example.firestationops.domain.model.UserState
 import com.example.firestationops.domain.repository.mock.MockAuthRepository
 import com.example.firestationops.domain.repository.mock.MockApparatusRepository
+import com.example.firestationops.domain.repository.mock.MockInspectionRepository
+import com.example.firestationops.ui.incident.*
+import com.example.firestationops.domain.repository.*
 import com.example.firestationops.ui.auth.LoginScreen
 import com.example.firestationops.ui.auth.LoginViewModel
 import com.example.firestationops.ui.dashboard.DashboardScreen
 import com.example.firestationops.ui.dashboard.DashboardViewModel
+import com.example.firestationops.ui.inspection.InspectionScreen
+import com.example.firestationops.ui.inspection.InspectionViewModel
+import com.example.firestationops.ui.deficiency.*
+
+sealed class Screen {
+    object Dashboard : Screen()
+    data class Inspection(val apparatusId: String) : Screen()
+    object DeficiencyList : Screen()
+    data class DeficiencyDetail(val deficiencyId: String) : Screen()
+    object IncidentList : Screen()
+    data class IncidentDetail(val incidentId: String?) : Screen()
+}
 
 @Composable
-@Preview
-fun App() {
-    val authRepository = remember { MockAuthRepository() }
-    val apparatusRepository = remember { MockApparatusRepository() }
+fun App(
+    authRepository: AuthRepository,
+    apparatusRepository: ApparatusRepository,
+    inspectionRepository: InspectionRepository,
+    deficiencyRepository: DeficiencyRepository,
+    attachmentRepository: AttachmentRepository,
+    incidentRepository: IncidentRepository
+) {
     val loginViewModel = remember { LoginViewModel(authRepository) }
     val userState by loginViewModel.userState.collectAsState()
+    
+    LaunchedEffect(userState) {
+        println("App: Current userState: $userState")
+    }
+    
+    var currentScreen by remember { mutableStateOf<Screen>(Screen.Dashboard) }
 
     MaterialTheme {
         Surface(
@@ -51,14 +76,104 @@ fun App() {
         ) {
             when (val state = userState) {
                 is UserState.Authenticated -> {
-                    val dashboardViewModel = remember(state.member.departmentId) {
-                        DashboardViewModel(state.member.departmentId, apparatusRepository)
+                    when (val screen = currentScreen) {
+                        Screen.Dashboard -> {
+                            val dashboardViewModel = remember(state.member.departmentId) {
+                                DashboardViewModel(
+                                    departmentId = state.member.departmentId,
+                                    apparatusRepository = apparatusRepository,
+                                    deficiencyRepository = deficiencyRepository,
+                                    inspectionRepository = inspectionRepository,
+                                    attachmentRepository = attachmentRepository
+                                )
+                            }
+                            MainContent(
+                                member = state.member,
+                                onLogout = loginViewModel::logout,
+                                content = { 
+                                    DashboardScreen(
+                                        viewModel = dashboardViewModel,
+                                        onApparatusClick = { id -> currentScreen = Screen.Inspection(id) },
+                                        onOpenDeficienciesClick = { currentScreen = Screen.DeficiencyList },
+                                        onDeficiencyClick = { id -> currentScreen = Screen.DeficiencyDetail(id) },
+                                        onOpenIncidentsClick = { currentScreen = Screen.IncidentList }
+                                    )
+                                }
+                            )
+                        }
+                        is Screen.Inspection -> {
+                            val inspectionViewModel = remember(screen.apparatusId, state.member.id) {
+                                InspectionViewModel(
+                                    apparatusId = screen.apparatusId,
+                                    member = state.member,
+                                    inspectionRepository = inspectionRepository,
+                                    deficiencyRepository = deficiencyRepository,
+                                    apparatusRepository = apparatusRepository,
+                                    attachmentRepository = attachmentRepository
+                                )
+                            }
+                            InspectionScreen(
+                                viewModel = inspectionViewModel,
+                                onBack = { currentScreen = Screen.Dashboard }
+                            )
+                        }
+                        Screen.DeficiencyList -> {
+                            val deficiencyListViewModel = remember(state.member.departmentId) {
+                                DeficiencyListViewModel(
+                                    departmentId = state.member.departmentId,
+                                    deficiencyRepository = deficiencyRepository,
+                                    apparatusRepository = apparatusRepository
+                                )
+                            }
+                            DeficiencyListScreen(
+                                viewModel = deficiencyListViewModel,
+                                onBack = { currentScreen = Screen.Dashboard },
+                                onDeficiencyClick = { id -> currentScreen = Screen.DeficiencyDetail(id) }
+                            )
+                        }
+                        is Screen.DeficiencyDetail -> {
+                            val deficiencyDetailViewModel = remember(screen.deficiencyId) {
+                                DeficiencyDetailViewModel(
+                                    deficiencyId = screen.deficiencyId,
+                                    userId = state.member.id,
+                                    deficiencyRepository = deficiencyRepository,
+                                    apparatusRepository = apparatusRepository
+                                )
+                            }
+                            DeficiencyDetailScreen(
+                                viewModel = deficiencyDetailViewModel,
+                                onBack = { currentScreen = Screen.DeficiencyList },
+                                onResolved = { currentScreen = Screen.DeficiencyList }
+                            )
+                        }
+                        Screen.IncidentList -> {
+                            val incidentListViewModel = remember(state.member.departmentId) {
+                                IncidentListViewModel(
+                                    departmentId = state.member.departmentId,
+                                    incidentRepository = incidentRepository
+                                )
+                            }
+                            IncidentListScreen(
+                                viewModel = incidentListViewModel,
+                                onBack = { currentScreen = Screen.Dashboard },
+                                onIncidentClick = { id -> currentScreen = Screen.IncidentDetail(id) },
+                                onCreateIncident = { currentScreen = Screen.IncidentDetail(null) }
+                            )
+                        }
+                        is Screen.IncidentDetail -> {
+                            val incidentDetailViewModel = remember(screen.incidentId, state.member.id) {
+                                IncidentDetailViewModel(
+                                    incidentId = screen.incidentId,
+                                    member = state.member,
+                                    incidentRepository = incidentRepository
+                                )
+                            }
+                            IncidentDetailScreen(
+                                viewModel = incidentDetailViewModel,
+                                onBack = { currentScreen = Screen.IncidentList }
+                            )
+                        }
                     }
-                    MainContent(
-                        member = state.member,
-                        onLogout = loginViewModel::logout,
-                        content = { DashboardScreen(dashboardViewModel) }
-                    )
                 }
                 UserState.Unauthenticated, is UserState.Loading, is UserState.Error -> {
                     LoginScreen(viewModel = loginViewModel)
