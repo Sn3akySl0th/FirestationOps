@@ -9,6 +9,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.firestationops.domain.model.AssignmentStatus
 import com.example.firestationops.domain.model.CommandLogEntry
 import com.example.firestationops.domain.model.CommandLogEntryType
 import com.example.firestationops.domain.model.IncidentStatus
@@ -130,6 +131,84 @@ fun IncidentDetailScreen(
             }
 
             item {
+                Text("Command board", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Track unit and personnel status at this incident.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            item {
+                Text("Units", style = MaterialTheme.typography.titleMedium)
+            }
+
+            if (uiState.unitAssignments.isEmpty()) {
+                item {
+                    Text("No units assigned yet.", style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                items(uiState.unitAssignments) { item ->
+                    AssignmentBoardCard(
+                        label = item.apparatusLabel,
+                        status = item.assignment.status,
+                        canManage = uiState.canManageAssignments,
+                        onStatusSelected = { status ->
+                            viewModel.updateUnitStatus(item.assignment.id, status)
+                        }
+                    )
+                }
+            }
+
+            if (uiState.canManageAssignments && uiState.availableApparatus.isNotEmpty()) {
+                item {
+                    Text("Assign unit", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        uiState.availableApparatus.forEach { apparatus ->
+                            AssistChip(
+                                onClick = { viewModel.assignUnit(apparatus.id) },
+                                label = { Text(apparatus.radioName) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                Text("Personnel", style = MaterialTheme.typography.titleMedium)
+            }
+
+            if (uiState.personnelAssignments.isEmpty()) {
+                item {
+                    Text("No personnel assigned yet.", style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                items(uiState.personnelAssignments) { item ->
+                    AssignmentBoardCard(
+                        label = item.memberLabel,
+                        status = item.assignment.status,
+                        canManage = uiState.canManageAssignments,
+                        onStatusSelected = { status ->
+                            viewModel.updatePersonnelStatus(item.assignment.id, status)
+                        }
+                    )
+                }
+            }
+
+            if (uiState.canManageAssignments && uiState.availableMembers.isNotEmpty()) {
+                item {
+                    Text("Assign personnel", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        uiState.availableMembers.forEach { member ->
+                            AssistChip(
+                                onClick = { viewModel.assignPersonnel(member.id) },
+                                label = { Text(member.fullName) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
                 Text("Command timeline", style = MaterialTheme.typography.titleLarge)
                 Text(
                     "Entries are append-only and attributed to the author.",
@@ -213,6 +292,64 @@ fun IncidentDetailScreen(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun AssignmentBoardCard(
+    label: String,
+    status: AssignmentStatus,
+    canManage: Boolean,
+    onStatusSelected: (AssignmentStatus) -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                Text(label, style = MaterialTheme.typography.titleSmall)
+                AssignmentStatusBadge(status)
+            }
+            if (canManage) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    nextStatuses(status).forEach { nextStatus ->
+                        FilterChip(
+                            selected = false,
+                            onClick = { onStatusSelected(nextStatus) },
+                            label = { Text(nextStatus.name.replace('_', ' ')) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AssignmentStatusBadge(status: AssignmentStatus) {
+    val color = when (status) {
+        AssignmentStatus.ASSIGNED -> MaterialTheme.colorScheme.secondary
+        AssignmentStatus.EN_ROUTE -> MaterialTheme.colorScheme.primary
+        AssignmentStatus.ON_SCENE -> MaterialTheme.colorScheme.tertiary
+        AssignmentStatus.RELEASED -> MaterialTheme.colorScheme.outline
+    }
+    Surface(color = color.copy(alpha = 0.15f), shape = MaterialTheme.shapes.small) {
+        Text(
+            text = status.name.replace('_', ' '),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = color
+        )
+    }
+}
+
+private fun nextStatuses(current: AssignmentStatus): List<AssignmentStatus> = when (current) {
+    AssignmentStatus.ASSIGNED -> listOf(AssignmentStatus.EN_ROUTE, AssignmentStatus.RELEASED)
+    AssignmentStatus.EN_ROUTE -> listOf(AssignmentStatus.ON_SCENE, AssignmentStatus.RELEASED)
+    AssignmentStatus.ON_SCENE -> listOf(AssignmentStatus.RELEASED)
+    AssignmentStatus.RELEASED -> listOf(AssignmentStatus.ASSIGNED)
 }
 
 @Composable

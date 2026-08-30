@@ -121,6 +121,34 @@ CREATE TABLE CommandLogEntryEntity (
     syncStatus TEXT NOT NULL DEFAULT 'LOCAL_ONLY'
 );
 
+CREATE TABLE IncidentUnitAssignmentEntity (
+    id TEXT NOT NULL PRIMARY KEY,
+    incidentId TEXT NOT NULL,
+    departmentId TEXT NOT NULL,
+    apparatusId TEXT NOT NULL,
+    status TEXT NOT NULL,
+    assignedAt INTEGER NOT NULL,
+    assignedByUserId TEXT NOT NULL,
+    updatedAt INTEGER NOT NULL,
+    updatedByUserId TEXT NOT NULL,
+    syncStatus TEXT NOT NULL DEFAULT 'LOCAL_ONLY',
+    UNIQUE(incidentId, apparatusId)
+);
+
+CREATE TABLE PersonnelAssignmentEntity (
+    id TEXT NOT NULL PRIMARY KEY,
+    incidentId TEXT NOT NULL,
+    departmentId TEXT NOT NULL,
+    memberId TEXT NOT NULL,
+    status TEXT NOT NULL,
+    assignedAt INTEGER NOT NULL,
+    assignedByUserId TEXT NOT NULL,
+    updatedAt INTEGER NOT NULL,
+    updatedByUserId TEXT NOT NULL,
+    syncStatus TEXT NOT NULL DEFAULT 'LOCAL_ONLY',
+    UNIQUE(incidentId, memberId)
+);
+
 -- Queries
 selectAllStations:
 SELECT * FROM StationEntity;
@@ -295,5 +323,25 @@ insertCommandLogEntry:
 INSERT INTO CommandLogEntryEntity(
     id, incidentId, departmentId, message, entryType, createdAt, createdByUserId,
     incidentTimestamp, correctsEntryId, syncStatus
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectUnitAssignmentsByIncident:
+SELECT * FROM IncidentUnitAssignmentEntity WHERE incidentId = ? ORDER BY assignedAt ASC;
+
+insertUnitAssignment:
+INSERT OR REPLACE INTO IncidentUnitAssignmentEntity(
+    id, incidentId, departmentId, apparatusId, status,
+    assignedAt, assignedByUserId, updatedAt, updatedByUserId, syncStatus
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectPersonnelAssignmentsByIncident:
+SELECT * FROM PersonnelAssignmentEntity WHERE incidentId = ? ORDER BY assignedAt ASC;
+
+insertPersonnelAssignment:
+INSERT OR REPLACE INTO PersonnelAssignmentEntity(
+    id, incidentId, departmentId, memberId, status,
+    assignedAt, assignedByUserId, updatedAt, updatedByUserId, syncStatus
 )
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);

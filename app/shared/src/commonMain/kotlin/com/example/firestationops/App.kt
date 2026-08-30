@@ -58,7 +58,8 @@ fun App(
     inspectionRepository: InspectionRepository,
     deficiencyRepository: DeficiencyRepository,
     attachmentRepository: AttachmentRepository,
-    incidentRepository: IncidentRepository
+    incidentRepository: IncidentRepository,
+    departmentRepository: DepartmentRepository
 ) {
     val loginViewModel = remember { LoginViewModel(authRepository) }
     val userState by loginViewModel.userState.collectAsState()
@@ -165,7 +166,9 @@ fun App(
                                 IncidentDetailViewModel(
                                     incidentId = screen.incidentId,
                                     member = state.member,
-                                    incidentRepository = incidentRepository
+                                    incidentRepository = incidentRepository,
+                                    apparatusRepository = apparatusRepository,
+                                    departmentRepository = departmentRepository
                                 )
                             }
                             IncidentDetailScreen(

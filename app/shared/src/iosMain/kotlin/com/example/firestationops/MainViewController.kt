@@ -9,6 +9,7 @@ import com.example.firestationops.domain.repository.persistent.PersistentAuthRep
 import com.example.firestationops.domain.repository.persistent.PersistentDeficiencyRepository
 import com.example.firestationops.domain.repository.persistent.PersistentInspectionRepository
 import com.example.firestationops.domain.repository.persistent.PersistentIncidentRepository
+import com.example.firestationops.domain.repository.persistent.PersistentDepartmentRepository
 
 fun MainViewController() = ComposeUIViewController {
     val driver = DatabaseDriverFactory().createDriver()
@@ -20,6 +21,7 @@ fun MainViewController() = ComposeUIViewController {
     val deficiencyRepository = PersistentDeficiencyRepository(database)
     val attachmentRepository = PersistentAttachmentRepository(database)
     val incidentRepository = PersistentIncidentRepository(database)
+    val departmentRepository = PersistentDepartmentRepository(database)
 
     App(
         authRepository = authRepository,
@@ -27,6 +29,7 @@ fun MainViewController() = ComposeUIViewController {
         inspectionRepository = inspectionRepository,
         deficiencyRepository = deficiencyRepository,
         attachmentRepository = attachmentRepository,
-        incidentRepository = incidentRepository
+        incidentRepository = incidentRepository,
+        departmentRepository = departmentRepository
     )
 }

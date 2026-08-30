@@ -541,4 +541,68 @@ class FirestationOpsDatabase(driver: SqlDriver) {
             correctsEntryId = row.correctsEntryId,
             syncStatus = SyncStatus.valueOf(row.syncStatus)
         )
+
+    fun getUnitAssignmentsByIncident(incidentId: String): List<IncidentUnitAssignment> =
+        dbQueries.selectUnitAssignmentsByIncident(incidentId).executeAsList().map(::mapUnitAssignmentRow)
+
+    fun insertUnitAssignment(assignment: IncidentUnitAssignment) {
+        dbQueries.insertUnitAssignment(
+            id = assignment.id,
+            incidentId = assignment.incidentId,
+            departmentId = assignment.departmentId,
+            apparatusId = assignment.apparatusId,
+            status = assignment.status.name,
+            assignedAt = assignment.assignedAt,
+            assignedByUserId = assignment.assignedByUserId,
+            updatedAt = assignment.updatedAt,
+            updatedByUserId = assignment.updatedByUserId,
+            syncStatus = assignment.syncStatus.name
+        )
+    }
+
+    private fun mapUnitAssignmentRow(row: com.example.firestationops.db.IncidentUnitAssignmentEntity): IncidentUnitAssignment =
+        IncidentUnitAssignment(
+            id = row.id,
+            incidentId = row.incidentId,
+            departmentId = row.departmentId,
+            apparatusId = row.apparatusId,
+            status = AssignmentStatus.valueOf(row.status),
+            assignedAt = row.assignedAt,
+            assignedByUserId = row.assignedByUserId,
+            updatedAt = row.updatedAt,
+            updatedByUserId = row.updatedByUserId,
+            syncStatus = SyncStatus.valueOf(row.syncStatus)
+        )
+
+    fun getPersonnelAssignmentsByIncident(incidentId: String): List<PersonnelAssignment> =
+        dbQueries.selectPersonnelAssignmentsByIncident(incidentId).executeAsList().map(::mapPersonnelAssignmentRow)
+
+    fun insertPersonnelAssignment(assignment: PersonnelAssignment) {
+        dbQueries.insertPersonnelAssignment(
+            id = assignment.id,
+            incidentId = assignment.incidentId,
+            departmentId = assignment.departmentId,
+            memberId = assignment.memberId,
+            status = assignment.status.name,
+            assignedAt = assignment.assignedAt,
+            assignedByUserId = assignment.assignedByUserId,
+            updatedAt = assignment.updatedAt,
+            updatedByUserId = assignment.updatedByUserId,
+            syncStatus = assignment.syncStatus.name
+        )
+    }
+
+    private fun mapPersonnelAssignmentRow(row: com.example.firestationops.db.PersonnelAssignmentEntity): PersonnelAssignment =
+        PersonnelAssignment(
+            id = row.id,
+            incidentId = row.incidentId,
+            departmentId = row.departmentId,
+            memberId = row.memberId,
+            status = AssignmentStatus.valueOf(row.status),
+            assignedAt = row.assignedAt,
+            assignedByUserId = row.assignedByUserId,
+            updatedAt = row.updatedAt,
+            updatedByUserId = row.updatedByUserId,
+            syncStatus = SyncStatus.valueOf(row.syncStatus)
+        )
 }
