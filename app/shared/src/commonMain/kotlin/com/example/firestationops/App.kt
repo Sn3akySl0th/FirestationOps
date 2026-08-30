@@ -3,7 +3,10 @@ package com.example.firestationops
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,13 +30,17 @@ import firestationops.app.shared.generated.resources.compose_multiplatform
 
 import com.example.firestationops.domain.model.UserState
 import com.example.firestationops.domain.repository.mock.MockAuthRepository
+import com.example.firestationops.domain.repository.mock.MockApparatusRepository
 import com.example.firestationops.ui.auth.LoginScreen
 import com.example.firestationops.ui.auth.LoginViewModel
+import com.example.firestationops.ui.dashboard.DashboardScreen
+import com.example.firestationops.ui.dashboard.DashboardViewModel
 
 @Composable
 @Preview
 fun App() {
     val authRepository = remember { MockAuthRepository() }
+    val apparatusRepository = remember { MockApparatusRepository() }
     val loginViewModel = remember { LoginViewModel(authRepository) }
     val userState by loginViewModel.userState.collectAsState()
 
@@ -44,7 +51,14 @@ fun App() {
         ) {
             when (val state = userState) {
                 is UserState.Authenticated -> {
-                    MainContent(state.member, onLogout = loginViewModel::logout)
+                    val dashboardViewModel = remember(state.member.departmentId) {
+                        DashboardViewModel(state.member.departmentId, apparatusRepository)
+                    }
+                    MainContent(
+                        member = state.member,
+                        onLogout = loginViewModel::logout,
+                        content = { DashboardScreen(dashboardViewModel) }
+                    )
                 }
                 UserState.Unauthenticated, is UserState.Loading, is UserState.Error -> {
                     LoginScreen(viewModel = loginViewModel)
@@ -55,44 +69,51 @@ fun App() {
 }
 
 @Composable
-fun MainContent(member: com.example.firestationops.domain.model.Member, onLogout: () -> Unit) {
-    var showContent by remember { mutableStateOf(false) }
+fun MainContent(
+    member: com.example.firestationops.domain.model.Member,
+    onLogout: () -> Unit,
+    content: @Composable () -> Unit
+) {
     Column(
         modifier = Modifier
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .safeContentPadding()
-            .fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .fillMaxSize()
     ) {
-        Text(
-            text = "Welcome, ${member.fullName}",
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(16.dp)
-        )
-        
-        Button(onClick = { showContent = !showContent }) {
-            Text("Toggle Sample Content")
+        Box(modifier = Modifier.weight(1f)) {
+            content()
         }
         
-        AnimatedVisibility(showContent) {
-            val greeting = remember { Greeting().greet() }
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Image(painterResource(Res.drawable.compose_multiplatform), null)
-                Text("Compose: $greeting")
-            }
-        }
-        
-        Spacer(modifier = Modifier.weight(1f))
-        
-        Button(
-            onClick = onLogout,
-            modifier = Modifier.padding(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+        // Simple Bottom Bar for Logout and Info
+        Surface(
+            tonalElevation = 8.dp,
+            shadowElevation = 8.dp
         ) {
-            Text("Logout")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .safeContentPadding()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = member.fullName,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = "Department ID: ${member.departmentId}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                
+                Button(
+                    onClick = onLogout,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Logout")
+                }
+            }
         }
     }
 }
+
