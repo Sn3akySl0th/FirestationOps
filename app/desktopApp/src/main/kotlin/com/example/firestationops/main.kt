@@ -10,6 +10,7 @@ import com.example.firestationops.domain.repository.persistent.PersistentDeficie
 import com.example.firestationops.domain.repository.persistent.PersistentInspectionRepository
 import com.example.firestationops.domain.repository.persistent.PersistentAttachmentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentIncidentRepository
+import com.example.firestationops.domain.repository.persistent.PersistentDepartmentRepository
 
 fun main() = application {
     val driver = DatabaseDriverFactory().createDriver()
@@ -21,6 +22,7 @@ fun main() = application {
     val deficiencyRepository = PersistentDeficiencyRepository(database)
     val attachmentRepository = PersistentAttachmentRepository(database)
     val incidentRepository = PersistentIncidentRepository(database)
+    val departmentRepository = PersistentDepartmentRepository(database)
 
     Window(
         onCloseRequest = ::exitApplication,
@@ -32,7 +34,8 @@ fun main() = application {
             inspectionRepository = inspectionRepository,
             deficiencyRepository = deficiencyRepository,
             attachmentRepository = attachmentRepository,
-            incidentRepository = incidentRepository
+            incidentRepository = incidentRepository,
+            departmentRepository = departmentRepository
         )
     }
 }

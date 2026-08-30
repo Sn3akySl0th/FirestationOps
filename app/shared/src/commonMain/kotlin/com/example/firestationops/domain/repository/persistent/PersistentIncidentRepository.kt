@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.map
 class PersistentIncidentRepository(private val database: FirestationOpsDatabase) : IncidentRepository {
     private val _incidents = MutableStateFlow<List<Incident>>(emptyList())
     private val _commandLog = MutableStateFlow<List<CommandLogEntry>>(emptyList())
+    private val _unitAssignments = MutableStateFlow<List<IncidentUnitAssignment>>(emptyList())
+    private val _personnelAssignments = MutableStateFlow<List<PersonnelAssignment>>(emptyList())
 
     init {
         if (database.getAllIncidents().isEmpty()) {
@@ -23,6 +25,8 @@ class PersistentIncidentRepository(private val database: FirestationOpsDatabase)
     private fun refresh() {
         _incidents.value = database.getAllIncidents()
         _commandLog.value = database.getAllIncidents().flatMap { database.getCommandLogEntriesByIncident(it.id) }
+        _unitAssignments.value = database.getAllIncidents().flatMap { database.getUnitAssignmentsByIncident(it.id) }
+        _personnelAssignments.value = database.getAllIncidents().flatMap { database.getPersonnelAssignmentsByIncident(it.id) }
     }
 
     private fun seed() {
@@ -67,6 +71,20 @@ class PersistentIncidentRepository(private val database: FirestationOpsDatabase)
                 syncStatus = SyncStatus.SYNCED
             )
         )
+        database.insertUnitAssignment(
+            IncidentUnitAssignment(
+                id = "unit-seed-1",
+                incidentId = incidentId,
+                departmentId = "mock-dept-id",
+                apparatusId = "ap-1",
+                status = AssignmentStatus.ON_SCENE,
+                assignedAt = now - 3_200_000L,
+                assignedByUserId = "admin-1",
+                updatedAt = now - 2_400_000L,
+                updatedByUserId = "admin-1",
+                syncStatus = SyncStatus.SYNCED
+            )
+        )
     }
 
     override fun getIncidentsByDepartment(departmentId: String): Flow<List<Incident>> =
@@ -92,6 +110,28 @@ class PersistentIncidentRepository(private val database: FirestationOpsDatabase)
 
     override suspend fun appendCommandLogEntry(entry: CommandLogEntry): Result<Unit> {
         database.insertCommandLogEntry(entry)
+        refresh()
+        return Result.success(Unit)
+    }
+
+    override fun getUnitAssignments(incidentId: String): Flow<List<IncidentUnitAssignment>> =
+        _unitAssignments.asStateFlow().map { list ->
+            list.filter { it.incidentId == incidentId }
+        }
+
+    override fun getPersonnelAssignments(incidentId: String): Flow<List<PersonnelAssignment>> =
+        _personnelAssignments.asStateFlow().map { list ->
+            list.filter { it.incidentId == incidentId }
+        }
+
+    override suspend fun saveUnitAssignment(assignment: IncidentUnitAssignment): Result<Unit> {
+        database.insertUnitAssignment(assignment)
+        refresh()
+        return Result.success(Unit)
+    }
+
+    override suspend fun savePersonnelAssignment(assignment: PersonnelAssignment): Result<Unit> {
+        database.insertPersonnelAssignment(assignment)
         refresh()
         return Result.success(Unit)
     }

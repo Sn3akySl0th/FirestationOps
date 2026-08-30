@@ -1,9 +1,12 @@
 package com.example.firestationops.ui.incident
 
 import com.example.firestationops.domain.model.*
+import com.example.firestationops.domain.repository.mock.MockApparatusRepository
+import com.example.firestationops.domain.repository.mock.MockDepartmentRepository
 import com.example.firestationops.domain.repository.mock.MockIncidentRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -25,7 +28,25 @@ class IncidentDetailViewModelTest {
         roles = setOf(Role.OFFICER)
     )
 
-    private val incidentRepository = MockIncidentRepository()
+    private fun testRepositories() = Triple(
+        MockIncidentRepository(),
+        MockApparatusRepository(),
+        MockDepartmentRepository()
+    )
+
+    private fun createViewModel(
+        incidentId: String,
+        scope: TestScope,
+        repositories: Triple<MockIncidentRepository, MockApparatusRepository, MockDepartmentRepository>
+    ) = IncidentDetailViewModel(
+        incidentId = incidentId,
+        member = member,
+        incidentRepository = repositories.first,
+        apparatusRepository = repositories.second,
+        departmentRepository = repositories.third,
+        scope = scope,
+        collectionScope = scope.backgroundScope
+    )
 
     private fun sampleIncident(
         id: String = "inc-1",
@@ -47,16 +68,11 @@ class IncidentDetailViewModelTest {
 
     @Test
     fun load_existingIncident_populatesFields() = runTest {
+        val repositories = testRepositories()
         val incident = sampleIncident()
-        incidentRepository.saveIncident(incident)
+        repositories.first.saveIncident(incident)
 
-        val viewModel = IncidentDetailViewModel(
-            incidentId = incident.id,
-            member = member,
-            incidentRepository = incidentRepository,
-            scope = this,
-            collectionScope = backgroundScope
-        )
+        val viewModel = createViewModel(incident.id, this, repositories)
 
         val state = viewModel.uiState.first { !it.isLoading }
         assertEquals(incident.id, state.incidentId)
@@ -69,38 +85,28 @@ class IncidentDetailViewModelTest {
 
     @Test
     fun updateTitle_autosavesDraft() = runTest {
+        val repositories = testRepositories()
         val incident = sampleIncident()
-        incidentRepository.saveIncident(incident)
+        repositories.first.saveIncident(incident)
 
-        val viewModel = IncidentDetailViewModel(
-            incidentId = incident.id,
-            member = member,
-            incidentRepository = incidentRepository,
-            scope = this,
-            collectionScope = backgroundScope
-        )
+        val viewModel = createViewModel(incident.id, this, repositories)
         viewModel.uiState.first { !it.isLoading }
 
         viewModel.updateTitle("Updated title")
         advanceUntilIdle()
 
-        val saved = incidentRepository.getIncident(incident.id).getOrThrow()
+        val saved = repositories.first.getIncident(incident.id).getOrThrow()
         assertEquals("Updated title", saved.title)
         assertEquals(SyncStatus.PENDING_SYNC, saved.syncStatus)
     }
 
     @Test
     fun activateIncident_changesStatusToActive() = runTest {
+        val repositories = testRepositories()
         val incident = sampleIncident()
-        incidentRepository.saveIncident(incident)
+        repositories.first.saveIncident(incident)
 
-        val viewModel = IncidentDetailViewModel(
-            incidentId = incident.id,
-            member = member,
-            incidentRepository = incidentRepository,
-            scope = this,
-            collectionScope = backgroundScope
-        )
+        val viewModel = createViewModel(incident.id, this, repositories)
         viewModel.uiState.first { !it.isLoading }
 
         viewModel.activateIncident()
@@ -110,22 +116,17 @@ class IncidentDetailViewModelTest {
         assertEquals(IncidentStatus.ACTIVE, state.status)
         assertTrue(state.canAppendLog)
 
-        val saved = incidentRepository.getIncident(incident.id).getOrThrow()
+        val saved = repositories.first.getIncident(incident.id).getOrThrow()
         assertEquals(IncidentStatus.ACTIVE, saved.status)
     }
 
     @Test
     fun activateIncident_withoutTitle_showsError() = runTest {
+        val repositories = testRepositories()
         val incident = sampleIncident(title = "")
-        incidentRepository.saveIncident(incident)
+        repositories.first.saveIncident(incident)
 
-        val viewModel = IncidentDetailViewModel(
-            incidentId = incident.id,
-            member = member,
-            incidentRepository = incidentRepository,
-            scope = this,
-            collectionScope = backgroundScope
-        )
+        val viewModel = createViewModel(incident.id, this, repositories)
         viewModel.uiState.first { !it.isLoading }
 
         viewModel.activateIncident()
@@ -138,16 +139,11 @@ class IncidentDetailViewModelTest {
 
     @Test
     fun appendLogEntry_addsTimelineEntry() = runTest {
+        val repositories = testRepositories()
         val incident = sampleIncident(status = IncidentStatus.ACTIVE)
-        incidentRepository.saveIncident(incident)
+        repositories.first.saveIncident(incident)
 
-        val viewModel = IncidentDetailViewModel(
-            incidentId = incident.id,
-            member = member,
-            incidentRepository = incidentRepository,
-            scope = this,
-            collectionScope = backgroundScope
-        )
+        val viewModel = createViewModel(incident.id, this, repositories)
         viewModel.uiState.first { !it.isLoading }
 
         viewModel.updateNewLogMessage("First unit on scene")
@@ -162,16 +158,11 @@ class IncidentDetailViewModelTest {
 
     @Test
     fun appendCorrection_createsCorrectionEntry() = runTest {
+        val repositories = testRepositories()
         val incident = sampleIncident(status = IncidentStatus.ACTIVE)
-        incidentRepository.saveIncident(incident)
+        repositories.first.saveIncident(incident)
 
-        val viewModel = IncidentDetailViewModel(
-            incidentId = incident.id,
-            member = member,
-            incidentRepository = incidentRepository,
-            scope = this,
-            collectionScope = backgroundScope
-        )
+        val viewModel = createViewModel(incident.id, this, repositories)
         viewModel.uiState.first { !it.isLoading }
 
         viewModel.updateNewLogMessage("Original entry")
@@ -194,16 +185,11 @@ class IncidentDetailViewModelTest {
 
     @Test
     fun closeIncident_disablesEditingAndTimelineAppend() = runTest {
+        val repositories = testRepositories()
         val incident = sampleIncident(status = IncidentStatus.ACTIVE)
-        incidentRepository.saveIncident(incident)
+        repositories.first.saveIncident(incident)
 
-        val viewModel = IncidentDetailViewModel(
-            incidentId = incident.id,
-            member = member,
-            incidentRepository = incidentRepository,
-            scope = this,
-            collectionScope = backgroundScope
-        )
+        val viewModel = createViewModel(incident.id, this, repositories)
         viewModel.uiState.first { !it.isLoading }
 
         viewModel.closeIncident()
@@ -213,8 +199,62 @@ class IncidentDetailViewModelTest {
         assertFalse(state.canEditFields)
         assertFalse(state.canAppendLog)
 
-        val saved = incidentRepository.getIncident(incident.id).getOrThrow()
+        val saved = repositories.first.getIncident(incident.id).getOrThrow()
         assertEquals(IncidentStatus.CLOSED, saved.status)
         assertNotNull(saved.closedAt)
+    }
+
+    @Test
+    fun assignUnit_addsAssignmentAndLogsTimeline() = runTest {
+        val repositories = testRepositories()
+        val incident = sampleIncident(status = IncidentStatus.ACTIVE)
+        repositories.first.saveIncident(incident)
+
+        val viewModel = createViewModel(incident.id, this, repositories)
+        viewModel.uiState.first { !it.isLoading }
+        advanceUntilIdle()
+        viewModel.uiState.first { it.availableApparatus.isNotEmpty() }
+
+        viewModel.assignUnit("ap-2")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.first { it.unitAssignments.isNotEmpty() }
+        assertEquals("L1", state.unitAssignments.first().apparatusLabel)
+        assertEquals(AssignmentStatus.ASSIGNED, state.unitAssignments.first().assignment.status)
+
+        val withTimeline = viewModel.uiState.first {
+            it.timeline.any { entry -> entry.message.contains("Unit L1 assigned") }
+        }
+        assertTrue(withTimeline.timeline.isNotEmpty())
+    }
+
+    @Test
+    fun updateUnitStatus_changesStatusAndLogsTimeline() = runTest {
+        val repositories = testRepositories()
+        val incident = sampleIncident(status = IncidentStatus.ACTIVE)
+        repositories.first.saveIncident(incident)
+
+        val viewModel = createViewModel(incident.id, this, repositories)
+        viewModel.uiState.first { !it.isLoading }
+        advanceUntilIdle()
+        viewModel.uiState.first { it.availableApparatus.isNotEmpty() }
+
+        viewModel.assignUnit("ap-2")
+        advanceUntilIdle()
+        val assignmentId = viewModel.uiState.first { it.unitAssignments.isNotEmpty() }
+            .unitAssignments.first().assignment.id
+
+        viewModel.updateUnitStatus(assignmentId, AssignmentStatus.EN_ROUTE)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.first {
+            it.unitAssignments.firstOrNull()?.assignment?.status == AssignmentStatus.EN_ROUTE
+        }
+        assertEquals(AssignmentStatus.EN_ROUTE, state.unitAssignments.first().assignment.status)
+
+        val withTimeline = viewModel.uiState.first {
+            it.timeline.any { entry -> entry.message.contains("EN ROUTE") }
+        }
+        assertTrue(withTimeline.timeline.isNotEmpty())
     }
 }
