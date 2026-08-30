@@ -1,6 +1,7 @@
 package com.example.firestationops.domain.repository.persistent
 
 import com.example.firestationops.db.FirestationOpsDatabase
+import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
 import com.example.firestationops.domain.model.Apparatus
 import com.example.firestationops.domain.model.ApparatusStatus
 import com.example.firestationops.domain.model.Station
@@ -15,10 +16,7 @@ class PersistentApparatusRepository(private val database: FirestationOpsDatabase
     private val _stations = MutableStateFlow<List<Station>>(emptyList())
 
     init {
-        val stations = database.getAllStations()
-        if (stations.isEmpty()) {
-            seed()
-        }
+        DemoDepartmentSeeder.ensureDemoData(database, "mock-dept-id")
         refresh()
     }
 
@@ -27,33 +25,16 @@ class PersistentApparatusRepository(private val database: FirestationOpsDatabase
         _stations.value = database.getAllStations()
     }
 
-    private fun seed() {
-        val s1 = Station(id = "st-1", departmentId = "mock-dept-id", name = "Station 1", address = "123 Main St")
-        val s2 = Station(id = "st-2", departmentId = "mock-dept-id", name = "Station 2", address = "456 Oak St")
-        database.insertStation(s1)
-        database.insertStation(s2)
-
-        database.insertApparatus(Apparatus(
-            id = "ap-1", departmentId = "mock-dept-id", stationId = "st-1",
-            name = "Engine 1", type = "Engine", radioName = "E1", status = ApparatusStatus.IN_SERVICE
-        ))
-        database.insertApparatus(Apparatus(
-            id = "ap-2", departmentId = "mock-dept-id", stationId = "st-1",
-            name = "Ladder 1", type = "Ladder", radioName = "L1", status = ApparatusStatus.IN_SERVICE
-        ))
-        database.insertApparatus(Apparatus(
-            id = "ap-3", departmentId = "mock-dept-id", stationId = "st-2",
-            name = "Engine 2", type = "Engine", radioName = "E2", status = ApparatusStatus.OUT_OF_SERVICE
-        ))
-        database.insertApparatus(Apparatus(
-            id = "ap-4", departmentId = "mock-dept-id", stationId = "st-2",
-            name = "Rescue 1", type = "Rescue", radioName = "R1", status = ApparatusStatus.IN_SERVICE
-        ))
+    fun ensureDepartmentData(departmentId: String) {
+        DemoDepartmentSeeder.ensureDemoData(database, departmentId)
+        refresh()
     }
 
-    override fun getStations(departmentId: String): Flow<List<Station>> = _stations.asStateFlow()
+    override fun getStations(departmentId: String): Flow<List<Station>> =
+        _stations.asStateFlow().map { list -> list.filter { it.departmentId == departmentId } }
 
-    override fun getApparatusByDepartment(departmentId: String): Flow<List<Apparatus>> = _apparatus.asStateFlow()
+    override fun getApparatusByDepartment(departmentId: String): Flow<List<Apparatus>> =
+        _apparatus.asStateFlow().map { list -> list.filter { it.departmentId == departmentId } }
 
     override fun getApparatusByStation(stationId: String): Flow<List<Apparatus>> = 
         _apparatus.asStateFlow().map { list -> list.filter { it.stationId == stationId } }

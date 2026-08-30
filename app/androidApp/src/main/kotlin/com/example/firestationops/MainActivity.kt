@@ -7,8 +7,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.tooling.preview.Preview
-import com.example.firestationops.db.DatabaseDriverFactory
-import com.example.firestationops.db.FirestationOpsDatabase
 import com.example.firestationops.domain.repository.mock.MockAuthRepository
 import com.example.firestationops.domain.repository.mock.MockApparatusRepository
 import com.example.firestationops.domain.repository.mock.MockDeficiencyRepository
@@ -16,39 +14,32 @@ import com.example.firestationops.domain.repository.mock.MockInspectionRepositor
 import com.example.firestationops.domain.repository.mock.MockAttachmentRepository
 import com.example.firestationops.domain.repository.mock.MockIncidentRepository
 import com.example.firestationops.domain.repository.mock.MockDepartmentRepository
-import com.example.firestationops.domain.repository.persistent.PersistentApparatusRepository
-import com.example.firestationops.domain.repository.persistent.PersistentAuthRepository
-import com.example.firestationops.domain.repository.persistent.PersistentDeficiencyRepository
-import com.example.firestationops.domain.repository.persistent.PersistentInspectionRepository
-import com.example.firestationops.domain.repository.persistent.PersistentAttachmentRepository
-import com.example.firestationops.domain.repository.persistent.PersistentIncidentRepository
-import com.example.firestationops.domain.repository.persistent.PersistentDepartmentRepository
+import com.example.firestationops.domain.sync.NoOpSyncCoordinator
+import com.example.firestationops.sync.SyncScheduler
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        val driver = DatabaseDriverFactory(this).createDriver()
-        val database = FirestationOpsDatabase(driver)
-        
-        val authRepository = PersistentAuthRepository(database)
-        val apparatusRepository = PersistentApparatusRepository(database)
-        val inspectionRepository = PersistentInspectionRepository(database)
-        val deficiencyRepository = PersistentDeficiencyRepository(database)
-        val attachmentRepository = PersistentAttachmentRepository(database)
-        val incidentRepository = PersistentIncidentRepository(database)
-        val departmentRepository = PersistentDepartmentRepository(database)
+        val graph = (application as FirestationOpsApplication).appGraph
 
         setContent {
             App(
-                authRepository = authRepository,
-                apparatusRepository = apparatusRepository,
-                inspectionRepository = inspectionRepository,
-                deficiencyRepository = deficiencyRepository,
-                attachmentRepository = attachmentRepository,
-                incidentRepository = incidentRepository,
-                departmentRepository = departmentRepository
+                authRepository = graph.authRepository,
+                apparatusRepository = graph.apparatusRepository,
+                inspectionRepository = graph.inspectionRepository,
+                deficiencyRepository = graph.deficiencyRepository,
+                attachmentRepository = graph.attachmentRepository,
+                incidentRepository = graph.incidentRepository,
+                departmentRepository = graph.departmentRepository,
+                syncCoordinator = graph.syncCoordinator,
+                onRequestBackgroundSync = {
+                    if (graph.firebaseEnabled) {
+                        SyncScheduler.runNow(this@MainActivity)
+                    }
+                },
+                onPrepareDepartment = graph::prepareDepartment
             )
         }
     }
@@ -71,6 +62,7 @@ fun AppAndroidPreview() {
         deficiencyRepository = deficiencyRepository,
         attachmentRepository = attachmentRepository,
         incidentRepository = incidentRepository,
-        departmentRepository = departmentRepository
+        departmentRepository = departmentRepository,
+        syncCoordinator = remember { NoOpSyncCoordinator() }
     )
 }

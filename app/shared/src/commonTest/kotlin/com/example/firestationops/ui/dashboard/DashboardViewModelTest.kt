@@ -2,6 +2,7 @@ package com.example.firestationops.ui.dashboard
 
 import com.example.firestationops.domain.model.*
 import com.example.firestationops.domain.repository.mock.*
+import com.example.firestationops.domain.sync.NoOpSyncCoordinator
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -17,6 +18,8 @@ class DashboardViewModelTest {
     private val deficiencyRepository = MockDeficiencyRepository()
     private val inspectionRepository = MockInspectionRepository()
     private val attachmentRepository = MockAttachmentRepository()
+    private val incidentRepository = MockIncidentRepository()
+    private val syncCoordinator = NoOpSyncCoordinator()
     private val fixedNow = 1_000_000_000_000L
 
     @Test
@@ -41,6 +44,8 @@ class DashboardViewModelTest {
             deficiencyRepository = deficiencyRepository,
             inspectionRepository = inspectionRepository,
             attachmentRepository = attachmentRepository,
+            incidentRepository = incidentRepository,
+            syncCoordinator = syncCoordinator,
             nowMillis = { fixedNow }
         )
 
@@ -84,6 +89,8 @@ class DashboardViewModelTest {
             deficiencyRepository = deficiencyRepository,
             inspectionRepository = inspectionRepository,
             attachmentRepository = attachmentRepository,
+            incidentRepository = incidentRepository,
+            syncCoordinator = syncCoordinator,
             nowMillis = { fixedNow }
         )
 
@@ -103,6 +110,8 @@ class DashboardViewModelTest {
             deficiencyRepository = deficiencyRepository,
             inspectionRepository = inspectionRepository,
             attachmentRepository = attachmentRepository,
+            incidentRepository = incidentRepository,
+            syncCoordinator = syncCoordinator,
             nowMillis = { fixedNow }
         )
 

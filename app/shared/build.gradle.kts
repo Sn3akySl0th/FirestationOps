@@ -103,4 +103,8 @@ sqldelight {
 
 dependencies {
     androidRuntimeClasspath(libs.compose.uiTooling)
+    add("androidMainImplementation", platform(libs.firebase.bom))
+    add("androidMainImplementation", libs.firebase.auth)
+    add("androidMainImplementation", libs.firebase.firestore)
+    add("androidMainImplementation", libs.firebase.storage)
 }

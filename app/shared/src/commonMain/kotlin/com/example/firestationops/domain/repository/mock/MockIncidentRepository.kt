@@ -4,6 +4,7 @@ import com.example.firestationops.domain.model.CommandLogEntry
 import com.example.firestationops.domain.model.Incident
 import com.example.firestationops.domain.model.IncidentUnitAssignment
 import com.example.firestationops.domain.model.PersonnelAssignment
+import com.example.firestationops.domain.model.SyncStatus
 import com.example.firestationops.domain.repository.IncidentRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +58,38 @@ class MockIncidentRepository : IncidentRepository {
         personnelAssignments.update { list ->
             list.filter { it.id != assignment.id } + assignment
         }
+        return Result.success(Unit)
+    }
+
+    override suspend fun getPendingSyncIncidents(): Result<List<Incident>> =
+        Result.success(incidents.value.filter { it.syncStatus != SyncStatus.SYNCED })
+
+    override suspend fun getPendingSyncCommandLogEntries(): Result<List<CommandLogEntry>> =
+        Result.success(commandLog.value.filter { it.syncStatus != SyncStatus.SYNCED })
+
+    override suspend fun getPendingSyncUnitAssignments(): Result<List<IncidentUnitAssignment>> =
+        Result.success(unitAssignments.value.filter { it.syncStatus != SyncStatus.SYNCED })
+
+    override suspend fun getPendingSyncPersonnelAssignments(): Result<List<PersonnelAssignment>> =
+        Result.success(personnelAssignments.value.filter { it.syncStatus != SyncStatus.SYNCED })
+
+    override suspend fun updateIncidentSyncStatus(id: String, syncStatus: SyncStatus): Result<Unit> {
+        incidents.update { list -> list.map { if (it.id == id) it.copy(syncStatus = syncStatus) else it } }
+        return Result.success(Unit)
+    }
+
+    override suspend fun updateCommandLogEntrySyncStatus(id: String, syncStatus: SyncStatus): Result<Unit> {
+        commandLog.update { list -> list.map { if (it.id == id) it.copy(syncStatus = syncStatus) else it } }
+        return Result.success(Unit)
+    }
+
+    override suspend fun updateUnitAssignmentSyncStatus(id: String, syncStatus: SyncStatus): Result<Unit> {
+        unitAssignments.update { list -> list.map { if (it.id == id) it.copy(syncStatus = syncStatus) else it } }
+        return Result.success(Unit)
+    }
+
+    override suspend fun updatePersonnelAssignmentSyncStatus(id: String, syncStatus: SyncStatus): Result<Unit> {
+        personnelAssignments.update { list -> list.map { if (it.id == id) it.copy(syncStatus = syncStatus) else it } }
         return Result.success(Unit)
     }
 }

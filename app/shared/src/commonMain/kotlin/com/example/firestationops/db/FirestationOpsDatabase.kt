@@ -289,6 +289,50 @@ class FirestationOpsDatabase(driver: SqlDriver) {
         dbQueries.updateApparatusStatus(status = status.name, id = id)
     }
 
+    fun updateStationDepartmentId(id: String, departmentId: String) {
+        dbQueries.updateStationDepartmentId(departmentId = departmentId, id = id)
+    }
+
+    fun updateApparatusDepartmentId(id: String, departmentId: String) {
+        dbQueries.updateApparatusDepartmentId(departmentId = departmentId, id = id)
+    }
+
+    fun updateTemplateDepartmentId(id: String, departmentId: String) {
+        dbQueries.updateTemplateDepartmentId(departmentId = departmentId, id = id)
+    }
+
+    fun updateInspectionApparatusId(newApparatusId: String, oldApparatusId: String) {
+        dbQueries.updateInspectionApparatusId(newApparatusId, oldApparatusId)
+    }
+
+    fun updateInspectionTemplateId(newTemplateId: String, oldTemplateId: String) {
+        dbQueries.updateInspectionTemplateId(newTemplateId, oldTemplateId)
+    }
+
+    fun updateDeficiencyApparatusId(newApparatusId: String, oldApparatusId: String) {
+        dbQueries.updateDeficiencyApparatusId(newApparatusId, oldApparatusId)
+    }
+
+    fun updateApparatusStationId(newStationId: String, oldStationId: String) {
+        dbQueries.updateApparatusStationId(newStationId, oldStationId)
+    }
+
+    fun updateUnitAssignmentApparatusId(newApparatusId: String, oldApparatusId: String) {
+        dbQueries.updateUnitAssignmentApparatusId(newApparatusId, oldApparatusId)
+    }
+
+    fun deleteStationById(id: String) {
+        dbQueries.deleteStationById(id)
+    }
+
+    fun deleteApparatusById(id: String) {
+        dbQueries.deleteApparatusById(id)
+    }
+
+    fun deleteTemplateById(id: String) {
+        dbQueries.deleteTemplateById(id)
+    }
+
     // Departments
     fun getAllDepartments(): List<Department> = dbQueries.selectAllDepartments().executeAsList().map {
         Department(
@@ -605,4 +649,32 @@ class FirestationOpsDatabase(driver: SqlDriver) {
             updatedByUserId = row.updatedByUserId,
             syncStatus = SyncStatus.valueOf(row.syncStatus)
         )
+
+    fun getPendingSyncIncidents(): List<Incident> =
+        dbQueries.selectPendingSyncIncidents().executeAsList().map(::mapIncidentRow)
+
+    fun getPendingSyncCommandLogEntries(): List<CommandLogEntry> =
+        dbQueries.selectPendingSyncCommandLogEntries().executeAsList().map(::mapCommandLogRow)
+
+    fun getPendingSyncUnitAssignments(): List<IncidentUnitAssignment> =
+        dbQueries.selectPendingSyncUnitAssignments().executeAsList().map(::mapUnitAssignmentRow)
+
+    fun getPendingSyncPersonnelAssignments(): List<PersonnelAssignment> =
+        dbQueries.selectPendingSyncPersonnelAssignments().executeAsList().map(::mapPersonnelAssignmentRow)
+
+    fun updateIncidentSyncStatus(id: String, syncStatus: SyncStatus) {
+        dbQueries.updateIncidentSyncStatus(syncStatus = syncStatus.name, id = id)
+    }
+
+    fun updateCommandLogEntrySyncStatus(id: String, syncStatus: SyncStatus) {
+        dbQueries.updateCommandLogEntrySyncStatus(syncStatus = syncStatus.name, id = id)
+    }
+
+    fun updateUnitAssignmentSyncStatus(id: String, syncStatus: SyncStatus) {
+        dbQueries.updateUnitAssignmentSyncStatus(syncStatus = syncStatus.name, id = id)
+    }
+
+    fun updatePersonnelAssignmentSyncStatus(id: String, syncStatus: SyncStatus) {
+        dbQueries.updatePersonnelAssignmentSyncStatus(syncStatus = syncStatus.name, id = id)
+    }
 }

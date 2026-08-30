@@ -2,6 +2,7 @@ package com.example.firestationops.domain.repository
 
 import com.example.firestationops.domain.model.Inspection
 import com.example.firestationops.domain.model.InspectionTemplate
+import com.example.firestationops.domain.model.SyncStatus
 import kotlinx.coroutines.flow.Flow
 
 interface InspectionRepository {
@@ -14,4 +15,6 @@ interface InspectionRepository {
     suspend fun getLatestDraft(apparatusId: String): Result<Inspection?>
     fun getInspectionsByDepartment(departmentId: String): Flow<List<Inspection>>
     suspend fun getLatestFinalizedInspection(apparatusId: String): Result<Inspection?>
+    suspend fun getPendingSyncInspections(): Result<List<Inspection>>
+    suspend fun updateSyncStatus(id: String, syncStatus: SyncStatus): Result<Unit>
 }

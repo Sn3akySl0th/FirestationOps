@@ -2,6 +2,7 @@ package com.example.firestationops.domain.repository.persistent
 
 import com.example.firestationops.currentTimeMillis
 import com.example.firestationops.db.FirestationOpsDatabase
+import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
 import com.example.firestationops.domain.model.*
 import com.example.firestationops.domain.repository.InspectionRepository
 import kotlinx.coroutines.flow.Flow
@@ -14,10 +15,8 @@ class PersistentInspectionRepository(private val database: FirestationOpsDatabas
     private val _inspections = MutableStateFlow<List<Inspection>>(emptyList())
 
     init {
-        val templates = database.getAllTemplates()
-        if (templates.isEmpty()) {
-            seed()
-        }
+        DemoDepartmentSeeder.ensureDemoData(database, "mock-dept-id")
+        seedDashboardDemoInspections()
         refresh()
     }
 
@@ -26,43 +25,14 @@ class PersistentInspectionRepository(private val database: FirestationOpsDatabas
         _inspections.value = database.getAllInspections()
     }
 
-    private fun seed() {
-        database.insertTemplate(
-            InspectionTemplate(
-                id = "tmpl-engine",
-                departmentId = "mock-dept-id",
-                name = "Daily Engine Inspection",
-                apparatusType = "Engine",
-                frequencyHours = 24,
-                items = listOf(
-                    InspectionTemplateItem(id = "item-1", text = "Engine Oil Level", category = "Engine"),
-                    InspectionTemplateItem(id = "item-2", text = "Coolant Level", category = "Engine"),
-                    InspectionTemplateItem(id = "item-3", text = "Tire Pressure", category = "Exterior"),
-                    InspectionTemplateItem(id = "item-4", text = "Lights and Siren", category = "Exterior"),
-                    InspectionTemplateItem(id = "item-5", text = "Pump Engagement", category = "Pump")
-                )
-            )
-        )
-        database.insertTemplate(
-            InspectionTemplate(
-                id = "tmpl-ladder",
-                departmentId = "mock-dept-id",
-                name = "Weekly Ladder Inspection",
-                apparatusType = "Ladder",
-                frequencyHours = 168,
-                items = listOf(
-                    InspectionTemplateItem(id = "l-1", text = "Hydraulic Fluid", category = "Aerial"),
-                    InspectionTemplateItem(id = "l-2", text = "Ladder Extension", category = "Aerial"),
-                    InspectionTemplateItem(id = "l-3", text = "Outriggers", category = "Aerial")
-                )
-            )
-        )
-
-        seedDashboardDemoInspections()
+    fun ensureDepartmentData(departmentId: String) {
+        DemoDepartmentSeeder.ensureDemoData(database, departmentId)
+        refresh()
     }
 
     private fun seedDashboardDemoInspections() {
-        if (database.getAllInspections().isNotEmpty()) return
+        val departmentId = "mock-dept-id"
+        if (database.getInspectionsByDepartment(departmentId).isNotEmpty()) return
 
         val now = currentTimeMillis()
         val twoDaysAgo = now - (2 * 86_400_000L)
@@ -71,9 +41,9 @@ class PersistentInspectionRepository(private val database: FirestationOpsDatabas
         database.insertInspection(
             Inspection(
                 id = "insp-seed-e1",
-                templateId = "tmpl-engine",
-                apparatusId = "ap-1",
-                departmentId = "mock-dept-id",
+                templateId = DemoDepartmentSeeder.TEMPLATE_ENGINE,
+                apparatusId = DemoDepartmentSeeder.APPARATUS_ENGINE_1,
+                departmentId = departmentId,
                 startedAt = twoDaysAgo,
                 completedAt = twoDaysAgo,
                 startedByUserId = "admin-1",
@@ -84,9 +54,9 @@ class PersistentInspectionRepository(private val database: FirestationOpsDatabas
         database.insertInspection(
             Inspection(
                 id = "insp-seed-r1",
-                templateId = "tmpl-engine",
-                apparatusId = "ap-4",
-                departmentId = "mock-dept-id",
+                templateId = DemoDepartmentSeeder.TEMPLATE_ENGINE,
+                apparatusId = DemoDepartmentSeeder.APPARATUS_RESCUE_1,
+                departmentId = departmentId,
                 startedAt = oneHourAgo,
                 completedAt = oneHourAgo,
                 startedByUserId = "admin-1",
@@ -124,5 +94,14 @@ class PersistentInspectionRepository(private val database: FirestationOpsDatabas
 
     override suspend fun getLatestFinalizedInspection(apparatusId: String): Result<Inspection?> {
         return Result.success(database.getLatestFinalizedByApparatus(apparatusId))
+    }
+
+    override suspend fun getPendingSyncInspections(): Result<List<Inspection>> =
+        Result.success(database.getPendingSyncInspections())
+
+    override suspend fun updateSyncStatus(id: String, syncStatus: SyncStatus): Result<Unit> {
+        database.updateInspectionSyncStatus(id, syncStatus)
+        refresh()
+        return Result.success(Unit)
     }
 }
