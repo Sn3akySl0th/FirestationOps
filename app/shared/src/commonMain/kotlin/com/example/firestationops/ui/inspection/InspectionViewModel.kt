@@ -6,6 +6,7 @@ import com.example.firestationops.domain.export.InspectionCsvExporter
 import com.example.firestationops.domain.export.InspectionPdfExporter
 import com.example.firestationops.domain.export.InspectionReport
 import com.example.firestationops.domain.export.InspectionReportBuilder
+import com.example.firestationops.domain.sync.SyncStatusTransitions
 import com.example.firestationops.platform.ExportResult
 import com.example.firestationops.platform.FileExporter
 import com.example.firestationops.domain.model.*
@@ -117,12 +118,14 @@ class InspectionViewModel(
 
     fun addAttachment(itemId: String, localPath: String) {
         scope.launch {
-            val attachment = Attachment(
-                id = "att-${randomUUID()}",
-                departmentId = member.departmentId,
-                localUri = localPath,
-                createdAt = currentTimeMillis(),
-                createdByUserId = member.id
+            val attachment = SyncStatusTransitions.attachmentForSave(
+                Attachment(
+                    id = "att-${randomUUID()}",
+                    departmentId = member.departmentId,
+                    localUri = localPath,
+                    createdAt = currentTimeMillis(),
+                    createdByUserId = member.id
+                )
             )
             attachmentRepository.saveAttachment(attachment)
             
@@ -159,16 +162,18 @@ class InspectionViewModel(
                 _uiState.update { it.copy(inspectionId = currentId) }
             }
 
-            val inspection = Inspection(
-                id = currentId,
-                templateId = template.id,
-                apparatusId = apparatusId,
-                departmentId = member.departmentId,
-                startedAt = state.startedAt ?: currentTimeMillis(),
-                completedAt = null,
-                startedByUserId = member.id,
-                responses = state.responses.values.toList(),
-                isFinalized = false
+            val inspection = SyncStatusTransitions.inspectionForDraft(
+                Inspection(
+                    id = currentId,
+                    templateId = template.id,
+                    apparatusId = apparatusId,
+                    departmentId = member.departmentId,
+                    startedAt = state.startedAt ?: currentTimeMillis(),
+                    completedAt = null,
+                    startedByUserId = member.id,
+                    responses = state.responses.values.toList(),
+                    isFinalized = false
+                )
             )
             inspectionRepository.saveInspection(inspection)
         }
@@ -197,16 +202,18 @@ class InspectionViewModel(
         scope.launch {
             _uiState.update { it.copy(isSubmitting = true, error = null) }
 
-            val inspection = Inspection(
-                id = inspectionId,
-                templateId = template.id,
-                apparatusId = apparatusId,
-                departmentId = member.departmentId,
-                startedAt = state.startedAt ?: currentTimeMillis(),
-                completedAt = currentTimeMillis(),
-                startedByUserId = member.id,
-                responses = state.responses.values.toList(),
-                isFinalized = true
+            val inspection = SyncStatusTransitions.inspectionForSubmit(
+                Inspection(
+                    id = inspectionId,
+                    templateId = template.id,
+                    apparatusId = apparatusId,
+                    departmentId = member.departmentId,
+                    startedAt = state.startedAt ?: currentTimeMillis(),
+                    completedAt = currentTimeMillis(),
+                    startedByUserId = member.id,
+                    responses = state.responses.values.toList(),
+                    isFinalized = true
+                )
             )
 
             // Save inspection
@@ -223,18 +230,20 @@ class InspectionViewModel(
                         marksOutOfService = true
                     }
                     
-                    val deficiency = Deficiency(
-                        id = "def-${currentTimeMillis()}-${response.itemId}",
-                        inspectionId = inspection.id,
-                        apparatusId = apparatusId,
-                        departmentId = member.departmentId,
-                        title = "Failed: ${item?.text ?: "Unknown item"}",
-                        description = response.note ?: "No note provided",
-                        severity = severity,
-                        status = DeficiencyStatus.OPEN,
-                        createdAt = currentTimeMillis(),
-                        createdByUserId = member.id,
-                        attachmentIds = response.attachmentIds
+                    val deficiency = SyncStatusTransitions.deficiencyForSave(
+                        Deficiency(
+                            id = "def-${currentTimeMillis()}-${response.itemId}",
+                            inspectionId = inspection.id,
+                            apparatusId = apparatusId,
+                            departmentId = member.departmentId,
+                            title = "Failed: ${item?.text ?: "Unknown item"}",
+                            description = response.note ?: "No note provided",
+                            severity = severity,
+                            status = DeficiencyStatus.OPEN,
+                            createdAt = currentTimeMillis(),
+                            createdByUserId = member.id,
+                            attachmentIds = response.attachmentIds
+                        )
                     )
                     deficiencyRepository.saveDeficiency(deficiency)
                 }

@@ -2,6 +2,7 @@ package com.example.firestationops.domain.repository.mock
 
 import com.example.firestationops.domain.model.Deficiency
 import com.example.firestationops.domain.model.DeficiencyStatus
+import com.example.firestationops.domain.model.SyncStatus
 import com.example.firestationops.domain.repository.DeficiencyRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +43,16 @@ class MockDeficiencyRepository : DeficiencyRepository {
                     )
                 } else d
             }
+        }
+        return Result.success(Unit)
+    }
+
+    override suspend fun getPendingSyncDeficiencies(): Result<List<Deficiency>> =
+        Result.success(deficiencies.value.filter { it.syncStatus != SyncStatus.SYNCED })
+
+    override suspend fun updateSyncStatus(id: String, syncStatus: SyncStatus): Result<Unit> {
+        deficiencies.update { list ->
+            list.map { if (it.id == id) it.copy(syncStatus = syncStatus) else it }
         }
         return Result.success(Unit)
     }

@@ -1,0 +1,21 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function memberDepartmentId() {
+      return firestore.get(/databases/(default)/documents/members/$(request.auth.uid)).data.departmentId;
+    }
+
+    match /departments/{departmentId}/attachments/{attachmentId} {
+      allow read: if signedIn() && memberDepartmentId() == departmentId;
+      allow write: if signedIn()
+        && memberDepartmentId() == departmentId
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}

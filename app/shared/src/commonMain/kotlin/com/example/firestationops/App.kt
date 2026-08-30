@@ -41,6 +41,8 @@ import com.example.firestationops.ui.dashboard.DashboardViewModel
 import com.example.firestationops.ui.inspection.InspectionScreen
 import com.example.firestationops.ui.inspection.InspectionViewModel
 import com.example.firestationops.ui.deficiency.*
+import com.example.firestationops.domain.sync.SyncCoordinator
+import com.example.firestationops.domain.sync.NoOpSyncCoordinator
 
 sealed class Screen {
     object Dashboard : Screen()
@@ -59,13 +61,24 @@ fun App(
     deficiencyRepository: DeficiencyRepository,
     attachmentRepository: AttachmentRepository,
     incidentRepository: IncidentRepository,
-    departmentRepository: DepartmentRepository
+    departmentRepository: DepartmentRepository,
+    syncCoordinator: SyncCoordinator = NoOpSyncCoordinator(),
+    onRequestBackgroundSync: () -> Unit = {},
+    onPrepareDepartment: (String) -> Unit = {}
 ) {
     val loginViewModel = remember { LoginViewModel(authRepository) }
     val userState by loginViewModel.userState.collectAsState()
     
     LaunchedEffect(userState) {
         println("App: Current userState: $userState")
+    }
+
+    LaunchedEffect(userState, syncCoordinator) {
+        val authenticated = userState as? UserState.Authenticated ?: return@LaunchedEffect
+        onPrepareDepartment(authenticated.member.departmentId)
+        if (syncCoordinator.isAvailable()) {
+            syncCoordinator.syncDepartment(authenticated.member.departmentId)
+        }
     }
     
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Dashboard) }
@@ -85,7 +98,9 @@ fun App(
                                     apparatusRepository = apparatusRepository,
                                     deficiencyRepository = deficiencyRepository,
                                     inspectionRepository = inspectionRepository,
-                                    attachmentRepository = attachmentRepository
+                                    attachmentRepository = attachmentRepository,
+                                    incidentRepository = incidentRepository,
+                                    syncCoordinator = syncCoordinator
                                 )
                             }
                             MainContent(
@@ -97,7 +112,10 @@ fun App(
                                         onApparatusClick = { id -> currentScreen = Screen.Inspection(id) },
                                         onOpenDeficienciesClick = { currentScreen = Screen.DeficiencyList },
                                         onDeficiencyClick = { id -> currentScreen = Screen.DeficiencyDetail(id) },
-                                        onOpenIncidentsClick = { currentScreen = Screen.IncidentList }
+                                        onOpenIncidentsClick = { currentScreen = Screen.IncidentList },
+                                        onSyncNowClick = {
+                                            onRequestBackgroundSync()
+                                        }
                                     )
                                 }
                             )

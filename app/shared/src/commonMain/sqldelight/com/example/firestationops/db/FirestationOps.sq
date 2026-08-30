@@ -235,6 +235,55 @@ UPDATE ApparatusEntity
 SET status = ?
 WHERE id = ?;
 
+updateStationDepartmentId:
+UPDATE StationEntity
+SET departmentId = ?
+WHERE id = ?;
+
+updateApparatusDepartmentId:
+UPDATE ApparatusEntity
+SET departmentId = ?
+WHERE id = ?;
+
+updateTemplateDepartmentId:
+UPDATE InspectionTemplateEntity
+SET departmentId = ?
+WHERE id = ?;
+
+updateInspectionApparatusId:
+UPDATE InspectionEntity
+SET apparatusId = ?
+WHERE apparatusId = ?;
+
+updateInspectionTemplateId:
+UPDATE InspectionEntity
+SET templateId = ?
+WHERE templateId = ?;
+
+updateDeficiencyApparatusId:
+UPDATE DeficiencyEntity
+SET apparatusId = ?
+WHERE apparatusId = ?;
+
+updateApparatusStationId:
+UPDATE ApparatusEntity
+SET stationId = ?
+WHERE stationId = ?;
+
+updateUnitAssignmentApparatusId:
+UPDATE IncidentUnitAssignmentEntity
+SET apparatusId = ?
+WHERE apparatusId = ?;
+
+deleteStationById:
+DELETE FROM StationEntity WHERE id = ?;
+
+deleteApparatusById:
+DELETE FROM ApparatusEntity WHERE id = ?;
+
+deleteTemplateById:
+DELETE FROM InspectionTemplateEntity WHERE id = ?;
+
 -- Membership Queries
 selectAllDepartments:
 SELECT * FROM DepartmentEntity;
@@ -345,3 +394,35 @@ INSERT OR REPLACE INTO PersonnelAssignmentEntity(
     assignedAt, assignedByUserId, updatedAt, updatedByUserId, syncStatus
 )
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectPendingSyncIncidents:
+SELECT * FROM IncidentEntity WHERE syncStatus != 'SYNCED';
+
+selectPendingSyncCommandLogEntries:
+SELECT * FROM CommandLogEntryEntity WHERE syncStatus != 'SYNCED';
+
+selectPendingSyncUnitAssignments:
+SELECT * FROM IncidentUnitAssignmentEntity WHERE syncStatus != 'SYNCED';
+
+selectPendingSyncPersonnelAssignments:
+SELECT * FROM PersonnelAssignmentEntity WHERE syncStatus != 'SYNCED';
+
+updateIncidentSyncStatus:
+UPDATE IncidentEntity
+SET syncStatus = ?
+WHERE id = ?;
+
+updateCommandLogEntrySyncStatus:
+UPDATE CommandLogEntryEntity
+SET syncStatus = ?
+WHERE id = ?;
+
+updateUnitAssignmentSyncStatus:
+UPDATE IncidentUnitAssignmentEntity
+SET syncStatus = ?
+WHERE id = ?;
+
+updatePersonnelAssignmentSyncStatus:
+UPDATE PersonnelAssignmentEntity
+SET syncStatus = ?
+WHERE id = ?;

@@ -11,6 +11,7 @@ import com.example.firestationops.domain.repository.persistent.PersistentInspect
 import com.example.firestationops.domain.repository.persistent.PersistentAttachmentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentIncidentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentDepartmentRepository
+import com.example.firestationops.domain.sync.NoOpSyncCoordinator
 
 fun main() = application {
     val driver = DatabaseDriverFactory().createDriver()
@@ -35,7 +36,8 @@ fun main() = application {
             deficiencyRepository = deficiencyRepository,
             attachmentRepository = attachmentRepository,
             incidentRepository = incidentRepository,
-            departmentRepository = departmentRepository
+            departmentRepository = departmentRepository,
+            syncCoordinator = NoOpSyncCoordinator()
         )
     }
 }

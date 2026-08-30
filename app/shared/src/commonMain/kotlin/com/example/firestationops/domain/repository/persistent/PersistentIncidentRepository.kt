@@ -2,6 +2,7 @@ package com.example.firestationops.domain.repository.persistent
 
 import com.example.firestationops.currentTimeMillis
 import com.example.firestationops.db.FirestationOpsDatabase
+import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
 import com.example.firestationops.domain.model.*
 import com.example.firestationops.domain.repository.IncidentRepository
 import kotlinx.coroutines.flow.Flow
@@ -76,7 +77,7 @@ class PersistentIncidentRepository(private val database: FirestationOpsDatabase)
                 id = "unit-seed-1",
                 incidentId = incidentId,
                 departmentId = "mock-dept-id",
-                apparatusId = "ap-1",
+                apparatusId = DemoDepartmentSeeder.APPARATUS_ENGINE_1,
                 status = AssignmentStatus.ON_SCENE,
                 assignedAt = now - 3_200_000L,
                 assignedByUserId = "admin-1",
@@ -132,6 +133,42 @@ class PersistentIncidentRepository(private val database: FirestationOpsDatabase)
 
     override suspend fun savePersonnelAssignment(assignment: PersonnelAssignment): Result<Unit> {
         database.insertPersonnelAssignment(assignment)
+        refresh()
+        return Result.success(Unit)
+    }
+
+    override suspend fun getPendingSyncIncidents(): Result<List<Incident>> =
+        Result.success(database.getPendingSyncIncidents())
+
+    override suspend fun getPendingSyncCommandLogEntries(): Result<List<CommandLogEntry>> =
+        Result.success(database.getPendingSyncCommandLogEntries())
+
+    override suspend fun getPendingSyncUnitAssignments(): Result<List<IncidentUnitAssignment>> =
+        Result.success(database.getPendingSyncUnitAssignments())
+
+    override suspend fun getPendingSyncPersonnelAssignments(): Result<List<PersonnelAssignment>> =
+        Result.success(database.getPendingSyncPersonnelAssignments())
+
+    override suspend fun updateIncidentSyncStatus(id: String, syncStatus: SyncStatus): Result<Unit> {
+        database.updateIncidentSyncStatus(id, syncStatus)
+        refresh()
+        return Result.success(Unit)
+    }
+
+    override suspend fun updateCommandLogEntrySyncStatus(id: String, syncStatus: SyncStatus): Result<Unit> {
+        database.updateCommandLogEntrySyncStatus(id, syncStatus)
+        refresh()
+        return Result.success(Unit)
+    }
+
+    override suspend fun updateUnitAssignmentSyncStatus(id: String, syncStatus: SyncStatus): Result<Unit> {
+        database.updateUnitAssignmentSyncStatus(id, syncStatus)
+        refresh()
+        return Result.success(Unit)
+    }
+
+    override suspend fun updatePersonnelAssignmentSyncStatus(id: String, syncStatus: SyncStatus): Result<Unit> {
+        database.updatePersonnelAssignmentSyncStatus(id, syncStatus)
         refresh()
         return Result.success(Unit)
     }

@@ -3,6 +3,7 @@ package com.example.firestationops.domain.repository.mock
 import com.example.firestationops.domain.model.Inspection
 import com.example.firestationops.domain.model.InspectionTemplate
 import com.example.firestationops.domain.model.InspectionTemplateItem
+import com.example.firestationops.domain.model.SyncStatus
 import com.example.firestationops.domain.repository.InspectionRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -76,5 +77,15 @@ class MockInspectionRepository : InspectionRepository {
             .filter { it.apparatusId == apparatusId && it.isFinalized && it.completedAt != null }
             .maxByOrNull { it.completedAt!! }
         return Result.success(latest)
+    }
+
+    override suspend fun getPendingSyncInspections(): Result<List<Inspection>> =
+        Result.success(inspections.value.filter { it.syncStatus != SyncStatus.SYNCED })
+
+    override suspend fun updateSyncStatus(id: String, syncStatus: SyncStatus): Result<Unit> {
+        inspections.update { list ->
+            list.map { if (it.id == id) it.copy(syncStatus = syncStatus) else it }
+        }
+        return Result.success(Unit)
     }
 }

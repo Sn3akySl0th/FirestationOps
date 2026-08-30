@@ -16,10 +16,16 @@ import com.example.firestationops.domain.model.SyncStatus
 import com.example.firestationops.domain.repository.ApparatusRepository
 import com.example.firestationops.domain.repository.AttachmentRepository
 import com.example.firestationops.domain.repository.DeficiencyRepository
+import com.example.firestationops.domain.repository.IncidentRepository
 import com.example.firestationops.domain.repository.InspectionRepository
+import com.example.firestationops.domain.sync.SyncCoordinator
+import com.example.firestationops.domain.sync.SyncRunnerState
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import com.example.firestationops.ui.deficiency.DeficiencyWithApparatus
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -30,8 +36,15 @@ class DashboardViewModel(
     private val deficiencyRepository: DeficiencyRepository,
     private val inspectionRepository: InspectionRepository,
     private val attachmentRepository: AttachmentRepository,
+    private val incidentRepository: IncidentRepository,
+    private val syncCoordinator: SyncCoordinator,
     private val nowMillis: () -> Long = { currentTimeMillis() }
 ) : ViewModel() {
+
+    private val _syncMessage = MutableStateFlow<String?>(null)
+    val syncMessage: StateFlow<String?> = _syncMessage.asStateFlow()
+    val syncState: StateFlow<SyncRunnerState> = syncCoordinator.syncState
+    val cloudSyncEnabled: Boolean = syncCoordinator.isAvailable()
 
     val uiState: StateFlow<DashboardUiState> = combine(
         combine(
@@ -47,8 +60,9 @@ class DashboardViewModel(
             attachmentRepository.getAttachmentsByDepartment(departmentId)
         ) { inspections, templates, attachments ->
             Triple(inspections, templates, attachments)
-        }
-    ) { stationData, inspectionData ->
+        },
+        incidentRepository.getIncidentsByDepartment(departmentId)
+    ) { stationData, inspectionData, incidents ->
         val (stations, apparatusList, openDeficiencies) = stationData
         val (inspections, templates, attachments) = inspectionData
         buildDashboardState(
@@ -57,11 +71,40 @@ class DashboardViewModel(
             openDeficiencies = openDeficiencies,
             inspections = inspections,
             templates = templates,
-            attachments = attachments
+            attachments = attachments,
+            incidents = incidents
         )
     }
         .catch { emit(DashboardUiState.Error(it.message ?: "Failed to load dashboard")) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardUiState.Loading)
+
+    fun syncNow() {
+        if (!syncCoordinator.isAvailable()) {
+            _syncMessage.value = "Cloud sync is not configured on this device."
+            return
+        }
+
+        viewModelScope.launch {
+            _syncMessage.value = null
+            val result = syncCoordinator.syncDepartment(departmentId)
+            _syncMessage.value = when {
+                result.isSuccess && result.uploadedCount > 0 && result.downloadedCount > 0 ->
+                    "Downloaded ${result.downloadedCount} and uploaded ${result.uploadedCount} record(s)."
+                result.isSuccess && result.uploadedCount > 0 ->
+                    "Synced ${result.uploadedCount} record(s) to the cloud."
+                result.isSuccess && result.downloadedCount > 0 ->
+                    "Downloaded ${result.downloadedCount} record(s) from the cloud."
+                result.isSuccess ->
+                    "Everything is already up to date."
+                else ->
+                    result.errors.firstOrNull() ?: "Sync failed."
+            }
+        }
+    }
+
+    fun clearSyncMessage() {
+        _syncMessage.value = null
+    }
 
     private fun buildDashboardState(
         stations: List<Station>,
@@ -69,7 +112,8 @@ class DashboardViewModel(
         openDeficiencies: List<Deficiency>,
         inspections: List<com.example.firestationops.domain.model.Inspection>,
         templates: List<com.example.firestationops.domain.model.InspectionTemplate>,
-        attachments: List<com.example.firestationops.domain.model.Attachment>
+        attachments: List<com.example.firestationops.domain.model.Attachment>,
+        incidents: List<com.example.firestationops.domain.model.Incident>
     ): DashboardUiState {
         val apparatusMap = apparatusList.associateBy { it.id }
         val complianceStatuses = InspectionComplianceCalculator.calculateForDepartment(
@@ -106,7 +150,8 @@ class DashboardViewModel(
 
         val pendingSyncCount = inspections.count { it.syncStatus != SyncStatus.SYNCED } +
             openDeficiencies.count { it.syncStatus != SyncStatus.SYNCED } +
-            attachments.count { it.syncStatus != SyncStatus.SYNCED }
+            attachments.count { it.syncStatus != SyncStatus.SYNCED } +
+            incidents.count { it.syncStatus != SyncStatus.SYNCED }
 
         val stationSections = stations.map { station ->
             StationDashboardSection(

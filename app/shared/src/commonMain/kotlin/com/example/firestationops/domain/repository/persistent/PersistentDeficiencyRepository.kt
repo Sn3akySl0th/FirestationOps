@@ -2,9 +2,11 @@ package com.example.firestationops.domain.repository.persistent
 
 import com.example.firestationops.currentTimeMillis
 import com.example.firestationops.db.FirestationOpsDatabase
+import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
 import com.example.firestationops.domain.model.Deficiency
 import com.example.firestationops.domain.model.DeficiencySeverity
 import com.example.firestationops.domain.model.DeficiencyStatus
+import com.example.firestationops.domain.model.SyncStatus
 import com.example.firestationops.domain.repository.DeficiencyRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +33,7 @@ class PersistentDeficiencyRepository(private val database: FirestationOpsDatabas
             Deficiency(
                 id = "def-seed-e2",
                 inspectionId = null,
-                apparatusId = "ap-3",
+                apparatusId = DemoDepartmentSeeder.APPARATUS_ENGINE_2,
                 departmentId = "mock-dept-id",
                 title = "Pump seal leak",
                 description = "Minor hydraulic leak at pump seal — unit held out of service pending repair.",
@@ -70,6 +72,15 @@ class PersistentDeficiencyRepository(private val database: FirestationOpsDatabas
             resolvedByUserId = userId,
             resolutionNote = note
         )
+        refresh()
+        return Result.success(Unit)
+    }
+
+    override suspend fun getPendingSyncDeficiencies(): Result<List<Deficiency>> =
+        Result.success(database.getPendingSyncDeficiencies())
+
+    override suspend fun updateSyncStatus(id: String, syncStatus: SyncStatus): Result<Unit> {
+        database.updateDeficiencySyncStatus(id, syncStatus)
         refresh()
         return Result.success(Unit)
     }

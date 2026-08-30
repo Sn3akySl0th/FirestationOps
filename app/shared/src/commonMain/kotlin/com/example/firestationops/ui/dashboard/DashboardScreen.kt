@@ -9,6 +9,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -18,6 +20,7 @@ import com.example.firestationops.domain.model.ApparatusInspectionStatus
 import com.example.firestationops.domain.model.ApparatusStatus
 import com.example.firestationops.domain.model.InspectionComplianceStatus
 import com.example.firestationops.domain.model.Station
+import com.example.firestationops.domain.sync.SyncRunnerState
 import com.example.firestationops.ui.deficiency.DeficiencyItem
 import com.example.firestationops.ui.deficiency.DeficiencyWithApparatus
 
@@ -27,9 +30,13 @@ fun DashboardScreen(
     onApparatusClick: (String) -> Unit,
     onOpenDeficienciesClick: () -> Unit,
     onDeficiencyClick: (String) -> Unit = {},
-    onOpenIncidentsClick: () -> Unit = {}
+    onOpenIncidentsClick: () -> Unit = {},
+    onSyncNowClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val syncMessage by viewModel.syncMessage.collectAsState()
+    val syncState by viewModel.syncState.collectAsState()
+    val cloudSyncEnabled = viewModel.cloudSyncEnabled
 
     when (val state = uiState) {
         DashboardUiState.Loading -> {
@@ -45,10 +52,18 @@ fun DashboardScreen(
         is DashboardUiState.Success -> {
             DashboardContent(
                 state = state,
+                syncState = syncState,
+                syncMessage = syncMessage,
+                cloudSyncEnabled = cloudSyncEnabled,
                 onApparatusClick = onApparatusClick,
                 onOpenDeficienciesClick = onOpenDeficienciesClick,
                 onDeficiencyClick = onDeficiencyClick,
-                onOpenIncidentsClick = onOpenIncidentsClick
+                onOpenIncidentsClick = onOpenIncidentsClick,
+                onSyncNowClick = {
+                    viewModel.syncNow()
+                    onSyncNowClick()
+                },
+                onDismissSyncMessage = viewModel::clearSyncMessage
             )
         }
     }
@@ -57,12 +72,33 @@ fun DashboardScreen(
 @Composable
 private fun DashboardContent(
     state: DashboardUiState.Success,
+    syncState: SyncRunnerState,
+    syncMessage: String?,
+    cloudSyncEnabled: Boolean,
     onApparatusClick: (String) -> Unit,
     onOpenDeficienciesClick: () -> Unit,
     onDeficiencyClick: (String) -> Unit,
-    onOpenIncidentsClick: () -> Unit
+    onOpenIncidentsClick: () -> Unit,
+    onSyncNowClick: () -> Unit,
+    onDismissSyncMessage: () -> Unit
 ) {
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(syncMessage) {
+        syncMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            onDismissSyncMessage()
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
         val isWide = maxWidth >= 900.dp
 
         if (isWide) {
@@ -74,7 +110,16 @@ private fun DashboardContent(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    dashboardMainItems(state, onApparatusClick, onOpenDeficienciesClick, onDeficiencyClick, onOpenIncidentsClick)
+                    dashboardMainItems(
+                        state,
+                        syncState,
+                        cloudSyncEnabled,
+                        onApparatusClick,
+                        onOpenDeficienciesClick,
+                        onDeficiencyClick,
+                        onOpenIncidentsClick,
+                        onSyncNowClick
+                    )
                 }
                 LazyColumn(
                     modifier = Modifier.weight(1f),
@@ -89,22 +134,45 @@ private fun DashboardContent(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                dashboardMainItems(state, onApparatusClick, onOpenDeficienciesClick, onDeficiencyClick, onOpenIncidentsClick)
+                dashboardMainItems(
+                    state,
+                    syncState,
+                    cloudSyncEnabled,
+                    onApparatusClick,
+                    onOpenDeficienciesClick,
+                    onDeficiencyClick,
+                    onOpenIncidentsClick,
+                    onSyncNowClick
+                )
                 item { StationsSection(state.stations, onApparatusClick) }
             }
+        }
         }
     }
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.dashboardMainItems(
     state: DashboardUiState.Success,
+    syncState: SyncRunnerState,
+    cloudSyncEnabled: Boolean,
     onApparatusClick: (String) -> Unit,
     onOpenDeficienciesClick: () -> Unit,
     onDeficiencyClick: (String) -> Unit,
-    onOpenIncidentsClick: () -> Unit
+    onOpenIncidentsClick: () -> Unit,
+    onSyncNowClick: () -> Unit
 ) {
     item {
         Text("Officer Dashboard", style = MaterialTheme.typography.headlineMedium)
+    }
+    if (cloudSyncEnabled || state.summary.pendingSyncCount > 0 || syncState == SyncRunnerState.RUNNING) {
+        item {
+            SyncStatusCard(
+                pendingCount = state.summary.pendingSyncCount,
+                syncState = syncState,
+                cloudSyncEnabled = cloudSyncEnabled,
+                onSyncNowClick = onSyncNowClick
+            )
+        }
     }
     item {
         SummaryRow(state.summary)
@@ -201,6 +269,47 @@ private fun SummaryRow(summary: DashboardSummary) {
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SyncStatusCard(
+    pendingCount: Int,
+    syncState: SyncRunnerState,
+    cloudSyncEnabled: Boolean,
+    onSyncNowClick: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Cloud sync", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    when (syncState) {
+                        SyncRunnerState.RUNNING -> "Sync in progress..."
+                        SyncRunnerState.FAILED -> "Last sync had errors. Try again when online."
+                        SyncRunnerState.IDLE -> when {
+                            pendingCount > 0 -> "$pendingCount record(s) waiting to upload."
+                            cloudSyncEnabled -> "Download cloud records or upload local changes."
+                            else -> "No pending changes."
+                        }
+                    },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            if (syncState == SyncRunnerState.RUNNING) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+            } else {
+                Button(onClick = onSyncNowClick) {
+                    Text("Sync now")
+                }
             }
         }
     }
