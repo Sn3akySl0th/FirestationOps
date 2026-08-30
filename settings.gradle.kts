@@ -1,4 +1,4 @@
-rootProject.name = "FirestaionOps"
+rootProject.name = "FirestationOps"
 
 pluginManagement {
     repositories {

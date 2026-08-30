@@ -17,11 +17,11 @@ dependencies {
 
 compose.desktop {
     application {
-        mainClass = "com.example.firestaionops.MainKt"
+        mainClass = "com.example.firestationops.MainKt"
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "com.example.firestaionops"
+            packageName = "com.example.firestationops"
             packageVersion = "1.0.0"
         }
     }

@@ -3,10 +3,10 @@ plugins {
     alias(libs.plugins.ktor)
 }
 
-group = "com.example.firestaionops"
+group = "com.example.firestationops"
 version = "1.0.0"
 application {
-    mainClass = "com.example.firestaionops.ApplicationKt"
+    mainClass = "com.example.firestationops.ApplicationKt"
 }
 
 dependencies {

@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		CAAEBF49BE8BD68E40A9D1AE /* FirestaionOps.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FirestaionOps.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CAAEBF49BE8BD68E40A9D1AE /* FirestationOps.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FirestationOps.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -59,7 +59,7 @@
 		BB0296FC2205EB9545C15A81 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				CAAEBF49BE8BD68E40A9D1AE /* FirestaionOps.app */,
+				CAAEBF49BE8BD68E40A9D1AE /* FirestationOps.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -87,7 +87,7 @@
 			packageProductDependencies = (
 			);
 			productName = iosApp;
-			productReference = CAAEBF49BE8BD68E40A9D1AE /* FirestaionOps.app */;
+			productReference = CAAEBF49BE8BD68E40A9D1AE /* FirestationOps.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */

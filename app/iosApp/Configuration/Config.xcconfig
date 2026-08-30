@@ -1,7 +1,7 @@
 TEAM_ID=
 
-PRODUCT_NAME=FirestaionOps
-PRODUCT_BUNDLE_IDENTIFIER=com.example.firestaionops.FirestaionOps$(TEAM_ID)
+PRODUCT_NAME=FirestationOps
+PRODUCT_BUNDLE_IDENTIFIER=com.example.firestationops.FirestationOps$(TEAM_ID)
 
 CURRENT_PROJECT_VERSION=1
 MARKETING_VERSION=1.0

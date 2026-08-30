@@ -22,7 +22,7 @@ kotlin {
     }
     
     android {
-       namespace = "com.example.firestaionops.core"
+       namespace = "com.example.firestationops.core"
        compileSdk = libs.versions.android.compileSdk.get().toInt()
        minSdk = libs.versions.android.minSdk.get().toInt()
     
