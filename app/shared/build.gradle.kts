@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
+    alias(libs.plugins.sqldelight)
 }
 
 kotlin {
@@ -56,7 +57,15 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.uiTooling)
+            implementation(libs.sqldelight.android.driver)
+            implementation(libs.androidx.activity.compose)
+            implementation(libs.androidx.core.ktx)
         }
+        
+        iosMain.dependencies {
+            implementation(libs.sqldelight.native.driver)
+        }
+
         commonMain.dependencies {
             api(project(":core"))
             implementation(libs.compose.runtime)
@@ -68,12 +77,26 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(libs.kotlinx.serialization.json)
+            implementation(libs.kotlinx.datetime)
+            implementation(libs.sqldelight.coroutines.extensions)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutinesTest)
         }
         jsMain.dependencies {
             implementation(libs.wrappers.browser)
+        }
+        jvmMain.dependencies {
+            implementation(libs.sqldelight.sqlite.driver)
+        }
+    }
+}
+
+sqldelight {
+    databases {
+        create("FirestationOpsDb") {
+            packageName.set("com.example.firestationops.db")
         }
     }
 }

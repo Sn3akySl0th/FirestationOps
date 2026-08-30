@@ -1,7 +1,10 @@
 package com.example.firestationops
 
-class WasmPlatform: Platform {
-    override val name: String = "Web with Kotlin/Wasm"
+class WasmJsPlatform : Platform {
+    override val name: String = "WebAssembly"
 }
 
-actual fun getPlatform(): Platform = WasmPlatform()
+actual fun getPlatform(): Platform = WasmJsPlatform()
+
+actual fun currentTimeMillis(): Long = 0L // TODO: Implement for wasmJs
+actual fun randomUUID(): String = "" // TODO: Implement for wasmJs

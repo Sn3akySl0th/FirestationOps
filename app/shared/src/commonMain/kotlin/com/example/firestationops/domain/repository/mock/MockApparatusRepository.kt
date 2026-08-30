@@ -51,4 +51,15 @@ class MockApparatusRepository : ApparatusRepository {
     override suspend fun getStation(id: String): Result<Station> = 
         stations.value.find { it.id == id }?.let { Result.success(it) } 
             ?: Result.failure(Exception("Station not found"))
+
+    override suspend fun updateApparatusStatus(id: String, status: ApparatusStatus): Result<Unit> {
+        val current = apparatus.value.toMutableList()
+        val index = current.indexOfFirst { it.id == id }
+        if (index != -1) {
+            current[index] = current[index].copy(status = status)
+            apparatus.value = current
+            return Result.success(Unit)
+        }
+        return Result.failure(Exception("Apparatus not found"))
+    }
 }

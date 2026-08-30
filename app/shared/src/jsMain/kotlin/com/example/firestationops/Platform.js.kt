@@ -1,14 +1,12 @@
 package com.example.firestationops
 
-import web.navigator.navigator
+import kotlinx.browser.window
 
-class JsPlatform: Platform {
-    private val userAgent = navigator.userAgent
-    private val browserList = listOf("Chrome", "Firefox", "Safari", "Edge")
-
-    override val name: String = userAgent.findAnyOf(browserList, ignoreCase = true)
-            ?.let { (startIndex) -> userAgent.substring(startIndex).substringBefore(" ") }
-            ?: "Unknown"
+class JSPlatform : Platform {
+    override val name: String = "JavaScript ${window.navigator.userAgent}"
 }
 
-actual fun getPlatform(): Platform = JsPlatform()
+actual fun getPlatform(): Platform = JSPlatform()
+
+actual fun currentTimeMillis(): Long = kotlin.js.Date.now().toLong()
+actual fun randomUUID(): String = crypto.randomUUID()

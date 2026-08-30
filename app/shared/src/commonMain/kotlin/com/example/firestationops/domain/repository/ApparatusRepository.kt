@@ -10,4 +10,5 @@ interface ApparatusRepository {
     fun getApparatusByStation(stationId: String): Flow<List<Apparatus>>
     suspend fun getApparatus(id: String): Result<Apparatus>
     suspend fun getStation(id: String): Result<Station>
+    suspend fun updateApparatusStatus(id: String, status: com.example.firestationops.domain.model.ApparatusStatus): Result<Unit>
 }
