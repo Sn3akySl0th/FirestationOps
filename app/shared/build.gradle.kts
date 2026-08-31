@@ -95,10 +95,6 @@ kotlin {
             implementation(libs.gitlive.firebase.storage)
             implementation(libs.gitlive.firebase.java.sdk)
             implementation(libs.kotlinx.coroutinesPlayServices)
-            implementation(platform(libs.firebase.bom))
-            implementation(libs.firebase.auth)
-            implementation(libs.firebase.firestore)
-            implementation(libs.firebase.storage)
         }
     }
 }
@@ -117,4 +113,8 @@ dependencies {
     add("androidMainImplementation", libs.firebase.auth)
     add("androidMainImplementation", libs.firebase.firestore)
     add("androidMainImplementation", libs.firebase.storage)
+    add("jvmMainImplementation", platform(libs.firebase.bom))
+    add("jvmMainImplementation", libs.firebase.auth)
+    add("jvmMainImplementation", libs.firebase.firestore)
+    add("jvmMainImplementation", libs.firebase.storage)
 }
