@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.firestationops.data.firebase.FirebaseAuthRepository
 import com.example.firestationops.data.firebase.FirebaseAvailability
 import com.example.firestationops.data.firebase.FirebaseDepartmentCatalogBootstrap
+import com.example.firestationops.data.firebase.FirebaseCatalogAdminRepository
 import com.example.firestationops.data.firebase.FirebaseMemberAccountProvisioner
 import com.example.firestationops.data.firebase.FirebaseMemberRosterRepository
 import com.example.firestationops.data.firebase.FirebaseSyncCoordinator
@@ -16,6 +17,7 @@ import com.example.firestationops.domain.bootstrap.NoOpDepartmentCatalogBootstra
 import com.example.firestationops.domain.repository.ApparatusRepository
 import com.example.firestationops.domain.repository.AttachmentRepository
 import com.example.firestationops.domain.repository.AuthRepository
+import com.example.firestationops.domain.repository.CatalogAdminRepository
 import com.example.firestationops.domain.repository.CatalogRepository
 import com.example.firestationops.domain.repository.DeficiencyRepository
 import com.example.firestationops.domain.repository.DepartmentRepository
@@ -25,6 +27,7 @@ import com.example.firestationops.domain.repository.InspectionRepository
 import com.example.firestationops.domain.repository.persistent.PersistentApparatusRepository
 import com.example.firestationops.domain.repository.persistent.PersistentAttachmentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentAuthRepository
+import com.example.firestationops.domain.repository.persistent.PersistentCatalogAdminRepository
 import com.example.firestationops.domain.repository.persistent.PersistentCatalogRepository
 import com.example.firestationops.domain.repository.persistent.PersistentDeficiencyRepository
 import com.example.firestationops.domain.repository.persistent.PersistentDepartmentRepository
@@ -65,6 +68,21 @@ class AppGraph(context: Context) {
     val catalogRepository: CatalogRepository = PersistentCatalogRepository(database) {
         (apparatusRepository as PersistentApparatusRepository).refreshCatalog()
         (inspectionRepository as PersistentInspectionRepository).refreshCatalog()
+    }
+
+    private val localCatalogAdminRepository = PersistentCatalogAdminRepository(database) {
+        (apparatusRepository as PersistentApparatusRepository).refreshCatalog()
+        (inspectionRepository as PersistentInspectionRepository).refreshCatalog()
+    }
+
+    val catalogAdminRepository: CatalogAdminRepository = if (firebaseEnabled) {
+        FirebaseCatalogAdminRepository(
+            local = localCatalogAdminRepository,
+            database = database,
+            firebaseEnabled = true
+        )
+    } else {
+        localCatalogAdminRepository
     }
 
     val departmentCatalogBootstrap: DepartmentCatalogBootstrap = if (firebaseEnabled) {

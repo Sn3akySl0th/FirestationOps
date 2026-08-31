@@ -73,6 +73,9 @@ class PersistentInspectionRepository(private val database: FirestationOpsDatabas
     override fun getActiveTemplates(departmentId: String): Flow<List<InspectionTemplate>> = 
         _templates.asStateFlow().map { list -> list.filter { it.isActive && it.departmentId == departmentId } }
 
+    override fun getTemplatesByDepartment(departmentId: String): Flow<List<InspectionTemplate>> =
+        _templates.asStateFlow().map { list -> list.filter { it.departmentId == departmentId } }
+
     override fun getTemplatesByApparatusType(departmentId: String, apparatusType: String): Flow<List<InspectionTemplate>> = 
         _templates.asStateFlow().map { list -> list.filter { it.apparatusType == apparatusType && it.isActive && it.departmentId == departmentId } }
 
