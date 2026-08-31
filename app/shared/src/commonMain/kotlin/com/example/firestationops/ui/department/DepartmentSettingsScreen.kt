@@ -118,6 +118,18 @@ fun DepartmentSettingsScreen(
                         }
                     }
 
+                    state.rosterManagementExplanation?.let { explanation ->
+                        item {
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    explanation,
+                                    modifier = Modifier.padding(16.dp),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+
                     if (state.canBootstrapCatalog) {
                         item {
                             Card(modifier = Modifier.fillMaxWidth()) {
@@ -196,7 +208,7 @@ fun DepartmentSettingsScreen(
                         item {
                             Text(
                                 if (state.canManageRoster) {
-                                    "When adding a member, set an initial password. The app creates their sign-in account automatically."
+                                    "When adding a member, set an initial password. The secure member service creates their sign-in account."
                                 } else {
                                     "New members need a member profile before they can sign in."
                                 },
@@ -321,7 +333,7 @@ private fun MemberEditorDialog(
                         enabled = !editor.isSaving
                     )
                     Text(
-                        "The member signs in with their email and this password. They can change it later in Firebase.",
+                        "The password is sent only to the secure member service and is cleared after submission.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }

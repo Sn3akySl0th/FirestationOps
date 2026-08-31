@@ -4,6 +4,7 @@ import com.example.firestationops.db.FirestationOpsDatabase
 import com.example.firestationops.domain.auth.AuthSessionRecovery
 import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
 import com.example.firestationops.domain.bootstrap.DepartmentCatalogProfiles
+import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.model.*
 import com.example.firestationops.domain.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -114,6 +115,10 @@ class PersistentAuthRepository(private val database: FirestationOpsDatabase) : A
         
         val member = database.getMemberByEmail(normalizedEmail)
         return if (member != null) {
+            MemberProvisioningRules.validateMemberProfile(member)?.let { message ->
+                _userState.value = UserState.Error(message)
+                return Result.failure(Exception(message))
+            }
             println("AuthRepository: Login success for ${member.email} (id: ${member.id})")
             database.setSessionUserId(member.id)
             DemoDepartmentSeeder.ensureDemoData(database, member.departmentId)

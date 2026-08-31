@@ -9,6 +9,7 @@ import com.example.firestationops.domain.model.Member
 import com.example.firestationops.domain.model.Role
 import com.example.firestationops.domain.repository.DepartmentRepository
 import com.example.firestationops.domain.repository.MemberRosterRepository
+import com.example.firestationops.domain.repository.MemberRosterAvailability
 import com.example.firestationops.domain.sync.SyncCoordinator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,7 @@ sealed interface DepartmentSettingsUiState {
         val members: List<Member>,
         val cloudSyncEnabled: Boolean,
         val canManageRoster: Boolean,
+        val rosterManagementExplanation: String?,
         val canBootstrapCatalog: Boolean,
         val cloudCatalogEmpty: Boolean
     ) : DepartmentSettingsUiState
@@ -90,7 +92,10 @@ class DepartmentSettingsViewModel(
                 departmentId = department.id,
                 members = members.sortedBy { it.lastName },
                 cloudSyncEnabled = cloudSyncEnabled,
-                canManageRoster = member.hasRole(Role.ADMIN),
+                canManageRoster = member.hasRole(Role.ADMIN) &&
+                    memberRosterRepository.availability is MemberRosterAvailability.Available,
+                rosterManagementExplanation =
+                    (memberRosterRepository.availability as? MemberRosterAvailability.Unavailable)?.explanation,
                 canBootstrapCatalog = member.hasRole(Role.ADMIN),
                 cloudCatalogEmpty = cloudCatalogEmpty
             )
@@ -113,10 +118,12 @@ class DepartmentSettingsViewModel(
     }
 
     fun openNewMemberEditor() {
+        if (memberRosterRepository.availability !is MemberRosterAvailability.Available) return
         _editorState.value = MemberEditorState(showInitialPasswordField = cloudSyncEnabled)
     }
 
     fun openMemberEditor(existing: Member) {
+        if (memberRosterRepository.availability !is MemberRosterAvailability.Available) return
         _editorState.value = MemberEditorState(
             memberId = existing.id,
             email = existing.email,
@@ -169,7 +176,7 @@ class DepartmentSettingsViewModel(
     fun saveMemberEditor() {
         val editor = _editorState.value ?: return
         viewModelScope.launch {
-            _editorState.value = editor.copy(isSaving = true)
+            _editorState.value = editor.copy(isSaving = true, initialPassword = "")
             val input = MemberRosterInput(
                 email = editor.email,
                 firstName = editor.firstName,
@@ -201,7 +208,7 @@ class DepartmentSettingsViewModel(
                 }
                 refresh()
             }.onFailure { error ->
-                _editorState.value = editor.copy(isSaving = false)
+                _editorState.value = editor.copy(isSaving = false, initialPassword = "")
                 _actionMessage.value = error.message ?: "Unable to save member."
             }
         }

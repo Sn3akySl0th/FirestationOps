@@ -2,31 +2,42 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    function normalizedDepartmentId(departmentId) {
-      return departmentId is string
-        && departmentId.matches('^[0-9]+$')
-        && int(departmentId) >= 200
-        && int(departmentId) <= 225
-        ? '5'
-        : departmentId;
+    function canonicalMemberPath() {
+      return /databases/(default)/documents/members/$(request.auth.uid);
     }
 
-    function memberDepartmentId() {
-      return request.auth != null && request.auth.token.departmentId is string
-        ? normalizedDepartmentId(request.auth.token.departmentId)
-        : '';
+    function hasValidCanonicalRoles() {
+      let member = firestore.get(canonicalMemberPath()).data;
+      let roles = member.roles;
+      return roles is list
+        && roles.size() > 0
+        && roles.hasOnly(['MEMBER', 'APPARATUS_OFFICER', 'OFFICER', 'ADMIN']);
     }
 
-    function belongsToDepartment(departmentId) {
+    function isActiveDepartmentMember(departmentId) {
       return request.auth != null
-        && memberDepartmentId() == normalizedDepartmentId(departmentId);
+        && firestore.exists(canonicalMemberPath())
+        && firestore.get(canonicalMemberPath()).data.id == request.auth.uid
+        && firestore.get(canonicalMemberPath()).data.departmentId == departmentId
+        && firestore.get(canonicalMemberPath()).data.isActive == true
+        && hasValidCanonicalRoles();
+    }
+
+    function isAllowedImageUpload() {
+      return request.resource.size > 0
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('^image/(jpeg|png|webp)$');
     }
 
     match /departments/{departmentId}/attachments/{attachmentId} {
-      allow read: if belongsToDepartment(departmentId);
-      allow write: if belongsToDepartment(departmentId)
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+      allow read: if isActiveDepartmentMember(departmentId);
+      allow create, update: if isActiveDepartmentMember(departmentId)
+        && isAllowedImageUpload();
+      allow delete: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

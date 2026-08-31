@@ -39,7 +39,7 @@ The desktop app uses the [GitLive Firebase Kotlin SDK](https://github.com/GitLiv
 
 Without a desktop Firebase config file, the desktop app continues to use local simulated auth and offline-only persistence.
 
-Member account creation (initial password provisioning) remains Android-only. Desktop can manage rosters locally and sync existing cloud members after sign-in.
+Cloud member provisioning remains Android-only. When Firebase is configured, desktop roster controls are disabled with an explanation so a local edit cannot be mistaken for a successful cloud change.
 
 ## Member provisioning
 
@@ -56,28 +56,24 @@ members/{firebaseUid}
   isActive: true
 ```
 
-### In-app roster management (Milestone 12)
+### Server-controlled roster management
 
 Administrators add members from **Department settings** on the officer dashboard:
 
 1. Open **Department settings** from the dashboard (officers and admins).
 2. Tap **Add member** (admins only).
 3. Enter email, name, optional badge number, roles, and an **initial password** (at least 6 characters).
-4. Save — the app creates the Firebase Authentication account and member profile in one step.
+4. Save. Android calls `provisionDepartmentMember`; the callable Function verifies the acting administrator, creates the Authentication account, and atomically creates the canonical and nested roster records.
 
-The member can sign in immediately with that email and password. No Firebase console step is required.
+The client does not create Firebase Authentication accounts or membership documents directly. It does not save the new member locally until the callable Function succeeds, and it clears the submitted password from UI state.
 
 For roster-only entries without app sign-in, use local development mode (without `google-services.json`).
 
 All department data lives under `departments/5/...` (stations, apparatus, inspections, etc.).
 
-If `departmentId` was previously set to a badge number like `221`, the app remaps it to department `5` and stores `221` in `memberNumber` on sign-in.
+Legacy department identifiers are not normalized by clients. Users without a valid canonical `members/{uid}` document cannot obtain department access. Administrators can bootstrap an empty cloud catalog from **Department settings**, but catalog bootstrap does not upload or alter member records.
 
-Users without a `members/{uid}` document cannot sign in unless their email matches a locally seeded development member (first-time bootstrap only). The app does not assign `mock-dept-id` to unknown Firebase users.
-
-On first Firebase sign-in with a matching local seeded member, the app creates the `members/{uid}` document and mirrors it to `departments/{departmentId}/members/{uid}`.
-
-Administrators can bootstrap an empty cloud catalog from **Department settings** on the officer dashboard. This uploads the demo stations, apparatus, templates, and member roster for the department.
+The callable Functions derive the department from the acting administrator's canonical record. They reject client-supplied department authority, validate roles and profile fields, protect the final active administrator, update custom claims through the Admin SDK, and revoke refresh tokens after authority changes.
 
 ## Department catalog paths
 
@@ -101,13 +97,32 @@ npx -y firebase-tools@latest deploy --only firestore:rules,storage
 
 Review `firebase/firestore.rules` and `firebase/storage.rules` before deploying to production.
 
-**Important:** After pulling roster-management changes, deploy updated Firestore rules before adding members from the app:
+Do not deploy Functions or tightened rules until the migration checklist below is complete and emulator tests pass. Deploying rules before canonical records are normalized can lock out legitimate users.
 
-```bash
-npx -y firebase-tools@latest deploy --only firestore:rules
-```
+## Safe initial administrator bootstrap
 
-The rules normalize legacy Calhoun badge numbers (200–225) stored as `departmentId` so administrators assigned to department `5` can write roster records.
+Roster callables require an existing active administrator. Bootstrap the first administrator only from a trusted environment using the Admin SDK and Application Default Credentials:
+
+1. Verify the exact Firebase project and create the initial Authentication user.
+2. In one Firestore transaction, write matching `members/{uid}` and `departments/{departmentId}/members/{uid}` documents with the Auth UID, exact `departmentId`, `roles: ["ADMIN"]`, and `isActive: true`.
+3. Set `departmentId`, `roles`, and `isActive` custom claims through the Admin SDK.
+4. Verify both documents and active-admin coverage, then sign out and sign back in before calling roster Functions.
+
+Never open rules temporarily, self-create membership from a client, or commit service-account credentials to bootstrap an administrator. See `docs/permissions.md` for the complete process.
+
+## Required migration checklist
+
+Complete every item before production deployment:
+
+- [ ] Normalize every canonical `members/{uid}` record so `id` equals the Firebase Auth UID and `departmentId` is the exact tenant. Move legacy badge numbers from `departmentId` to `memberNumber` where applicable.
+- [ ] Add a reviewed Boolean `isActive` to records where it is missing; do not automatically activate unknown accounts.
+- [ ] Replace malformed, scalar, empty, misspelled, or unknown roles with a reviewed non-empty list containing only `MEMBER`, `APPARATUS_OFFICER`, `OFFICER`, or `ADMIN`.
+- [ ] Reconcile canonical records with `departments/{departmentId}/members/{uid}` projections and remove or archive stale pending/invite projections through trusted server tooling.
+- [ ] Backfill or correct missing/mismatched `departmentId` values on every department-scoped document, including nested command-log and assignment records.
+- [ ] Verify every department has at least one active canonical `ADMIN`; two active administrators are recommended during migration.
+- [ ] After role or active-state changes, update claims through server code, revoke refresh tokens, and have affected users force-refresh or sign in again. Firestore and Storage use canonical membership immediately, while application-visible claims require a new ID token.
+
+Take a reviewed backup/export and define a rollback procedure before normalizing production data. Do not use production member or incident data in emulator fixtures.
 
 ## Verification plan
 
@@ -117,13 +132,15 @@ The rules normalize legacy Calhoun badge numbers (200–225) stored as `departme
 4. Confirm the inspection document appears under `departments/{departmentId}/inspections/{inspectionId}`.
 5. Attach a photo to a failed item, submit, sync, and confirm the Storage object and attachment metadata upload.
 
-## Emulator testing (recommended)
+## Emulator testing
 
 ```bash
-npx -y firebase-tools@latest emulators:start --only auth,firestore,storage
+npm --prefix firebase/functions ci
+npm --prefix firebase/tests ci
+firebase emulators:exec --project demo-firestationops --only auth,firestore,storage "npm --prefix firebase/tests test"
 ```
 
-Point the Android app at emulators during development if desired (requires additional Android emulator host configuration).
+The Firebase CLI currently requires Java 21 or newer. The tests use only fictional `dept-alpha` and `dept-bravo` data. Point the Android app at emulators during development if desired (requires additional Android emulator host configuration).
 
 ## Android physical device login troubleshooting
 
