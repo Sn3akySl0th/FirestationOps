@@ -97,4 +97,95 @@ class MemberProvisioningRulesTest {
         assertTrue(MemberProvisioningRules.isLocalDevelopmentMemberId("admin-user-id"))
         assertFalse(MemberProvisioningRules.isLocalDevelopmentMemberId("firebase-uid-abc123"))
     }
+
+    @Test
+    fun isPendingMemberId_detectsPendingRosterEntries() {
+        assertTrue(MemberProvisioningRules.isPendingMemberId("pending-abc-123"))
+        assertFalse(MemberProvisioningRules.isPendingMemberId("firebase-uid-abc123"))
+    }
+
+    @Test
+    fun validateRosterInput_rejectsDuplicateEmail() {
+        val existing = Member(
+            id = "member-1",
+            departmentId = "5",
+            email = "member@example.com",
+            firstName = "Alex",
+            lastName = "Rivera"
+        )
+        val input = MemberRosterInput(
+            email = "member@example.com",
+            firstName = "Jamie",
+            lastName = "Lee"
+        )
+
+        assertEquals(
+            "A member with this email already exists in the department.",
+            MemberProvisioningRules.validateRosterInput(input, "5", listOf(existing))
+        )
+    }
+
+    @Test
+    fun validateRosterInput_rejectsCalhounBadgeOutsideRange() {
+        val input = MemberRosterInput(
+            email = "new@example.com",
+            firstName = "Jamie",
+            lastName = "Lee",
+            memberNumber = "199"
+        )
+
+        assertEquals(
+            "Member number must be between 200 and 225.",
+            MemberProvisioningRules.validateRosterInput(input, "5", emptyList())
+        )
+    }
+
+    @Test
+    fun canChangeMemberActivation_blocksDeactivatingLastAdmin() {
+        val admin = Member(
+            id = "admin-1",
+            departmentId = "5",
+            email = "admin@example.com",
+            firstName = "Admin",
+            lastName = "User",
+            roles = setOf(Role.ADMIN)
+        )
+        val input = MemberRosterInput(
+            email = admin.email,
+            firstName = admin.firstName,
+            lastName = admin.lastName,
+            roles = admin.roles,
+            isActive = false
+        )
+
+        assertFalse(
+            MemberProvisioningRules.canChangeMemberActivation(admin, input, listOf(admin))
+        )
+    }
+
+    @Test
+    fun validateInitialPassword_requiresAtLeastSixCharacters() {
+        assertEquals(
+            "Initial password must be at least 6 characters.",
+            MemberProvisioningRules.validateInitialPassword("12345")
+        )
+        assertNull(MemberProvisioningRules.validateInitialPassword("123456"))
+    }
+
+    @Test
+    fun requireAdmin_rejectsNonAdminActor() {
+        val member = Member(
+            id = "member-1",
+            departmentId = "5",
+            email = "member@example.com",
+            firstName = "Alex",
+            lastName = "Rivera",
+            roles = setOf(Role.MEMBER)
+        )
+
+        assertEquals(
+            "Only administrators can manage the member roster.",
+            MemberProvisioningRules.requireAdmin(member)
+        )
+    }
 }

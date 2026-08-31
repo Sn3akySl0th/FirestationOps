@@ -41,6 +41,19 @@ members/{firebaseUid}
   isActive: true
 ```
 
+### In-app roster management (Milestone 12)
+
+Administrators add members from **Department settings** on the officer dashboard:
+
+1. Open **Department settings** from the dashboard (officers and admins).
+2. Tap **Add member** (admins only).
+3. Enter email, name, optional badge number, roles, and an **initial password** (at least 6 characters).
+4. Save — the app creates the Firebase Authentication account and member profile in one step.
+
+The member can sign in immediately with that email and password. No Firebase console step is required.
+
+For roster-only entries without app sign-in, use local development mode (without `google-services.json`).
+
 All department data lives under `departments/5/...` (stations, apparatus, inspections, etc.).
 
 If `departmentId` was previously set to a badge number like `221`, the app remaps it to department `5` and stores `221` in `memberNumber` on sign-in.
@@ -72,6 +85,14 @@ npx -y firebase-tools@latest deploy --only firestore:rules,storage
 ```
 
 Review `firebase/firestore.rules` and `firebase/storage.rules` before deploying to production.
+
+**Important:** After pulling roster-management changes, deploy updated Firestore rules before adding members from the app:
+
+```bash
+npx -y firebase-tools@latest deploy --only firestore:rules
+```
+
+The rules normalize legacy Calhoun badge numbers (200–225) stored as `departmentId` so administrators assigned to department `5` can write roster records.
 
 ## Verification plan
 

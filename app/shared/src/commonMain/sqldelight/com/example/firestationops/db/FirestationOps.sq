@@ -312,6 +312,9 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 deleteMembersWithEmailExceptId:
 DELETE FROM MemberEntity WHERE email = ? AND id != ?;
 
+deleteMemberById:
+DELETE FROM MemberEntity WHERE id = ?;
+
 -- Session Queries
 selectSession:
 SELECT userId FROM SessionEntity WHERE id = 0;

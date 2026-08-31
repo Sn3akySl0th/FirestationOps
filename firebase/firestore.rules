@@ -10,8 +10,17 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/members/$(request.auth.uid));
     }
 
+    function normalizedDepartmentId(departmentId) {
+      return departmentId is string
+        && departmentId.matches('^[0-9]+$')
+        && int(departmentId) >= 200
+        && int(departmentId) <= 225
+        ? '5'
+        : departmentId;
+    }
+
     function memberDepartmentId() {
-      return memberDoc().data.departmentId;
+      return normalizedDepartmentId(memberDoc().data.departmentId);
     }
 
     function memberRoles() {
@@ -19,22 +28,40 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return signedIn() && 'ADMIN' in memberRoles();
+      return signedIn()
+        && memberRoles() is list
+        && memberRoles().hasAny(['ADMIN']);
     }
 
     function belongsToDepartment(departmentId) {
       return signedIn() && memberDepartmentId() == departmentId;
     }
 
+    function isPendingDepartmentMemberId(memberId) {
+      return memberId.matches('^pending-.*');
+    }
+
     match /members/{userId} {
       allow read: if signedIn() && request.auth.uid == userId;
       allow create: if signedIn()
-        && request.auth.uid == userId
-        && request.resource.data.id == userId
-        && request.resource.data.departmentId is string
-        && request.resource.data.email is string
-        && request.resource.data.firstName is string
-        && request.resource.data.lastName is string;
+        && (
+          (
+            request.auth.uid == userId
+            && request.resource.data.id == userId
+            && request.resource.data.departmentId is string
+            && request.resource.data.email is string
+            && request.resource.data.firstName is string
+            && request.resource.data.lastName is string
+          )
+          || (
+            isAdmin()
+            && request.resource.data.id == userId
+            && request.resource.data.departmentId == memberDepartmentId()
+            && request.resource.data.email is string
+            && request.resource.data.firstName is string
+            && request.resource.data.lastName is string
+          )
+        );
       // Self-service profile fixes (e.g. legacy badge number stored as departmentId).
       // Role changes require an admin.
       allow update: if signedIn()
@@ -47,6 +74,14 @@ service cloud.firestore {
           || isAdmin()
         );
       allow delete: if false;
+    }
+
+    match /memberInvites/{inviteId} {
+      allow read: if signedIn()
+        && request.auth.token.email.lower() == resource.data.email.lower();
+      allow create, update: if isAdmin()
+        && request.resource.data.departmentId == memberDepartmentId();
+      allow delete: if isAdmin();
     }
 
     match /departments/{departmentId} {
@@ -76,7 +111,9 @@ service cloud.firestore {
         allow read: if belongsToDepartment(departmentId);
         allow create, update: if belongsToDepartment(departmentId)
           && (isAdmin() || request.auth.uid == memberId);
-        allow delete: if false;
+        allow delete: if belongsToDepartment(departmentId)
+          && isAdmin()
+          && isPendingDepartmentMemberId(memberId);
       }
 
       match /inspections/{inspectionId} {

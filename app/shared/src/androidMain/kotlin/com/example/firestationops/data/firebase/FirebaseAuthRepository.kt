@@ -7,6 +7,7 @@ import com.example.firestationops.domain.bootstrap.DepartmentCatalogProfiles
 import com.example.firestationops.domain.membership.CalhounMembershipNormalizer
 import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.model.Member
+import com.example.firestationops.domain.model.Role
 import com.example.firestationops.domain.model.UserState
 import com.example.firestationops.domain.repository.AuthRepository
 import com.example.firestationops.domain.repository.persistent.PersistentAuthRepository
@@ -107,25 +108,79 @@ class FirebaseAuthRepository(
         }
 
         val localMember = database.getMemberByEmail(email)?.let(CalhounMembershipNormalizer::normalize)
-        if (!MemberProvisioningRules.canAutoProvisionFromLocal(localMember, email)) {
-            error(MemberProvisioningRules.membershipRequiredMessage())
+        if (MemberProvisioningRules.canAutoProvisionFromLocal(localMember, email)) {
+            val now = currentTimeMillis()
+            val member = CalhounMembershipNormalizer.normalize(
+                localMember!!.copy(
+                    id = uid,
+                    email = email,
+                    updatedAt = now
+                )
+            )
+
+            firestore.document(FirestorePaths.member(uid))
+                .set(FirestoreMappers.memberToMap(member))
+                .await()
+            mirrorDepartmentMember(member)
+
+            return finalizeMember(member, localMember.departmentId)
         }
 
+        val invitedMember = loadInvitedMember(uid, email)
+        if (invitedMember != null) {
+            return invitedMember
+        }
+
+        error(MemberProvisioningRules.membershipRequiredMessage())
+    }
+
+    private suspend fun loadInvitedMember(uid: String, email: String): Member? {
+        val inviteSnapshot = firestore.document(FirestorePaths.memberInvite(email)).get().await()
+        if (!inviteSnapshot.exists()) return null
+
+        val inviteData = inviteSnapshot.data ?: return null
+        val departmentId = inviteData["departmentId"] as? String ?: return null
+        val pendingMemberId = inviteData["pendingMemberId"] as? String
         val now = currentTimeMillis()
+
         val member = CalhounMembershipNormalizer.normalize(
-            localMember!!.copy(
+            Member(
                 id = uid,
+                departmentId = departmentId,
                 email = email,
+                firstName = inviteData["firstName"] as? String ?: return null,
+                lastName = inviteData["lastName"] as? String ?: return null,
+                memberNumber = inviteData["memberNumber"] as? String,
+                roles = (inviteData["roles"] as? List<*>)?.mapNotNull { roleName ->
+                    (roleName as? String)?.let { runCatching { Role.valueOf(it) }.getOrNull() }
+                }?.toSet()?.ifEmpty { setOf(Role.MEMBER) }
+                    ?: setOf(Role.MEMBER),
+                isActive = inviteData["isActive"] as? Boolean ?: true,
+                createdAt = (inviteData["createdAt"] as? Number)?.toLong() ?: now,
                 updatedAt = now
             )
         )
+
+        MemberProvisioningRules.validateMemberProfile(member)?.let { message ->
+            error(message)
+        }
 
         firestore.document(FirestorePaths.member(uid))
             .set(FirestoreMappers.memberToMap(member))
             .await()
         mirrorDepartmentMember(member)
 
-        return finalizeMember(member, localMember!!.departmentId)
+        if (pendingMemberId != null && pendingMemberId != uid) {
+            firestore.document(FirestorePaths.departmentMember(departmentId, pendingMemberId))
+                .delete()
+                .await()
+        }
+
+        firestore.document(FirestorePaths.memberInvite(email))
+            .delete()
+            .await()
+
+        return finalizeMember(member, departmentId)
     }
 
     private suspend fun finalizeMember(member: Member, rawDepartmentId: String?): Member {

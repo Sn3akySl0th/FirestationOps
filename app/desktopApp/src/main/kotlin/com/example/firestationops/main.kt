@@ -10,7 +10,7 @@ import com.example.firestationops.domain.repository.persistent.PersistentDeficie
 import com.example.firestationops.domain.repository.persistent.PersistentInspectionRepository
 import com.example.firestationops.domain.repository.persistent.PersistentAttachmentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentIncidentRepository
-import com.example.firestationops.domain.repository.persistent.PersistentDepartmentRepository
+import com.example.firestationops.domain.repository.persistent.PersistentMemberRosterRepository
 import com.example.firestationops.domain.bootstrap.NoOpDepartmentCatalogBootstrap
 import com.example.firestationops.domain.sync.NoOpSyncCoordinator
 
@@ -25,6 +25,7 @@ fun main() = application {
     val attachmentRepository = PersistentAttachmentRepository(database)
     val incidentRepository = PersistentIncidentRepository(database)
     val departmentRepository = PersistentDepartmentRepository(database)
+    val memberRosterRepository = PersistentMemberRosterRepository(database)
 
     Window(
         onCloseRequest = ::exitApplication,
@@ -38,6 +39,7 @@ fun main() = application {
             attachmentRepository = attachmentRepository,
             incidentRepository = incidentRepository,
             departmentRepository = departmentRepository,
+            memberRosterRepository = memberRosterRepository,
             departmentCatalogBootstrap = NoOpDepartmentCatalogBootstrap(),
             syncCoordinator = NoOpSyncCoordinator(),
             onPrepareDepartment = { departmentId ->
