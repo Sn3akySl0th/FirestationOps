@@ -7,11 +7,14 @@ import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.membership.MemberRosterInput
 import com.example.firestationops.domain.model.Member
 import com.example.firestationops.domain.repository.MemberRosterRepository
+import com.example.firestationops.domain.repository.MemberRosterAvailability
 import com.example.firestationops.randomUUID
 
 class PersistentMemberRosterRepository(
     private val database: FirestationOpsDatabase
 ) : MemberRosterRepository {
+    override val availability: MemberRosterAvailability = MemberRosterAvailability.Available
+
     override suspend fun upsertMember(
         actingMember: Member,
         input: MemberRosterInput,

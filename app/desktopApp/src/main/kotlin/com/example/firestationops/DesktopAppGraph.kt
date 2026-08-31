@@ -22,6 +22,7 @@ import com.example.firestationops.domain.repository.DepartmentRepository
 import com.example.firestationops.domain.repository.IncidentRepository
 import com.example.firestationops.domain.repository.InspectionRepository
 import com.example.firestationops.domain.repository.MemberRosterRepository
+import com.example.firestationops.domain.repository.NoOpMemberRosterRepository
 import com.example.firestationops.domain.repository.persistent.PersistentApparatusRepository
 import com.example.firestationops.domain.repository.persistent.PersistentAttachmentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentAuthRepository
@@ -58,7 +59,14 @@ class DesktopAppGraph {
     val departmentRepository: DepartmentRepository = PersistentDepartmentRepository(database)
 
     private val localAuthRepository: PersistentAuthRepository = PersistentAuthRepository(database)
-    val memberRosterRepository: MemberRosterRepository = PersistentMemberRosterRepository(database)
+    val memberRosterRepository: MemberRosterRepository = if (firebaseEnabled) {
+        NoOpMemberRosterRepository(
+            "Cloud roster management is currently available on Android only. " +
+                "Use an Android administrator device so membership changes go through the secure member service."
+        )
+    } else {
+        PersistentMemberRosterRepository(database)
+    }
 
     val catalogRepository: CatalogRepository = PersistentCatalogRepository(database) {
         (apparatusRepository as PersistentApparatusRepository).refreshCatalog()

@@ -1,6 +1,5 @@
 package com.example.firestationops.data.firebase
 
-import com.example.firestationops.currentTimeMillis
 import com.example.firestationops.db.FirestationOpsDatabase
 import com.example.firestationops.domain.auth.AuthSessionRecovery
 import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
@@ -8,7 +7,6 @@ import com.example.firestationops.domain.bootstrap.DepartmentCatalogProfiles
 import com.example.firestationops.domain.membership.CalhounMembershipNormalizer
 import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.model.Member
-import com.example.firestationops.domain.model.Role
 import com.example.firestationops.domain.model.UserState
 import com.example.firestationops.domain.repository.AuthRepository
 import com.example.firestationops.domain.repository.persistent.PersistentAuthRepository
@@ -66,7 +64,7 @@ class JvmFirebaseAuthRepository(
         return runCatching {
             auth.signInWithEmailAndPassword(normalizedEmail, password).await()
             val firebaseUser = auth.currentUser ?: error("Firebase sign-in did not return a user.")
-            val member = loadOrProvisionMember(firebaseUser.uid, normalizedEmail)
+            val member = loadCanonicalMember(firebaseUser.uid)
             MemberProvisioningRules.validateMemberProfile(member)?.let { message ->
                 error(message)
             }
@@ -92,109 +90,12 @@ class JvmFirebaseAuthRepository(
         return Result.success(Unit)
     }
 
-    private suspend fun loadOrProvisionMember(uid: String, email: String): Member {
+    private suspend fun loadCanonicalMember(uid: String): Member {
         val snapshot = JvmGoogleFirestoreClient.getDocument(FirestorePaths.member(uid))
-        if (snapshot.exists) {
-            val rawData = snapshot.data
-            val member = FirestoreMappers.memberFromMap(uid, rawData)
-                ?: error("Member profile is missing required fields.")
-            return finalizeMember(member, rawData["departmentId"] as? String)
+        if (!snapshot.exists) {
+            error(MemberProvisioningRules.membershipRequiredMessage())
         }
-
-        val localMember = database.getMemberByEmail(email)?.let(CalhounMembershipNormalizer::normalize)
-        if (MemberProvisioningRules.canAutoProvisionFromLocal(localMember, email)) {
-            val now = currentTimeMillis()
-            val member = CalhounMembershipNormalizer.normalize(
-                localMember!!.copy(
-                    id = uid,
-                    email = email,
-                    updatedAt = now
-                )
-            )
-
-            JvmGoogleFirestoreClient.setDocument(
-                FirestorePaths.member(uid),
-                FirestoreMappers.memberToMap(member)
-            )
-            mirrorDepartmentMember(member)
-
-            return finalizeMember(member, localMember.departmentId)
-        }
-
-        val invitedMember = loadInvitedMember(uid, email)
-        if (invitedMember != null) {
-            return invitedMember
-        }
-
-        error(MemberProvisioningRules.membershipRequiredMessage())
-    }
-
-    private suspend fun loadInvitedMember(uid: String, email: String): Member? {
-        val inviteSnapshot = JvmGoogleFirestoreClient.getDocument(FirestorePaths.memberInvite(email))
-        if (!inviteSnapshot.exists) return null
-
-        val inviteData = inviteSnapshot.data
-        val departmentId = inviteData["departmentId"] as? String ?: return null
-        val pendingMemberId = inviteData["pendingMemberId"] as? String
-        val now = currentTimeMillis()
-
-        val member = CalhounMembershipNormalizer.normalize(
-            Member(
-                id = uid,
-                departmentId = departmentId,
-                email = email,
-                firstName = inviteData["firstName"] as? String ?: return null,
-                lastName = inviteData["lastName"] as? String ?: return null,
-                memberNumber = inviteData["memberNumber"] as? String,
-                roles = (inviteData["roles"] as? List<*>)?.mapNotNull { roleName ->
-                    (roleName as? String)?.let { runCatching { Role.valueOf(it) }.getOrNull() }
-                }?.toSet()?.ifEmpty { setOf(Role.MEMBER) }
-                    ?: setOf(Role.MEMBER),
-                isActive = inviteData["isActive"] as? Boolean ?: true,
-                createdAt = (inviteData["createdAt"] as? Number)?.toLong() ?: now,
-                updatedAt = now
-            )
-        )
-
-        MemberProvisioningRules.validateMemberProfile(member)?.let { message ->
-            error(message)
-        }
-
-        JvmGoogleFirestoreClient.setDocument(
-            FirestorePaths.member(uid),
-            FirestoreMappers.memberToMap(member)
-        )
-        mirrorDepartmentMember(member)
-
-        if (pendingMemberId != null && pendingMemberId != uid) {
-            JvmGoogleFirestoreClient.deleteDocument(
-                FirestorePaths.departmentMember(departmentId, pendingMemberId)
-            )
-        }
-
-        JvmGoogleFirestoreClient.deleteDocument(FirestorePaths.memberInvite(email))
-
-        return finalizeMember(member, departmentId)
-    }
-
-    private suspend fun finalizeMember(member: Member, rawDepartmentId: String?): Member {
-        val normalized = CalhounMembershipNormalizer.normalize(member)
-        if (rawDepartmentId != null &&
-            CalhounMembershipNormalizer.isLegacyMemberNumberUsedAsDepartmentId(rawDepartmentId)
-        ) {
-            JvmGoogleFirestoreClient.setDocument(
-                FirestorePaths.member(normalized.id),
-                FirestoreMappers.memberToMap(normalized)
-            )
-            mirrorDepartmentMember(normalized)
-        }
-        return normalized
-    }
-
-    private suspend fun mirrorDepartmentMember(member: Member) {
-        JvmGoogleFirestoreClient.setDocument(
-            FirestorePaths.departmentMember(member.departmentId, member.id),
-            FirestoreMappers.memberToMap(member)
-        )
+        return FirestoreMappers.memberFromMap(uid, snapshot.data)
+            ?: error("Member profile is missing required fields.")
     }
 }

@@ -4,7 +4,6 @@ import com.example.firestationops.currentTimeMillis
 import com.example.firestationops.db.FirestationOpsDatabase
 import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
 import com.example.firestationops.domain.bootstrap.DepartmentCatalogBootstrap
-import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.model.Member
 import com.example.firestationops.domain.model.Role
 
@@ -79,17 +78,6 @@ class JvmFirebaseDepartmentCatalogBootstrap(
                     JvmGoogleFirestoreClient.setDocument(
                         FirestorePaths.template(departmentId, template.id),
                         FirestoreMappers.templateToMap(template.copy(updatedAt = now)),
-                        merge = true
-                    )
-                    uploadedCount++
-                }
-
-            database.getAllMembersByDepartment(departmentId)
-                .filter { !MemberProvisioningRules.isLocalDevelopmentMemberId(it.id) }
-                .forEach { departmentMember ->
-                    JvmGoogleFirestoreClient.setDocument(
-                        FirestorePaths.departmentMember(departmentId, departmentMember.id),
-                        FirestoreMappers.memberToMap(departmentMember.copy(updatedAt = now)),
                         merge = true
                     )
                     uploadedCount++

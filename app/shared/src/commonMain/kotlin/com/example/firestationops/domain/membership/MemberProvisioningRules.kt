@@ -18,9 +18,6 @@ object MemberProvisioningRules {
         return null
     }
 
-    fun canAutoProvisionFromLocal(localMember: Member?, email: String): Boolean =
-        localMember != null && localMember.email.equals(email, ignoreCase = true)
-
     fun membershipRequiredMessage(): String =
         "No department membership found. Ask an administrator to create your member profile before signing in."
 
@@ -46,11 +43,6 @@ object MemberProvisioningRules {
         memberId.startsWith(PENDING_MEMBER_ID_PREFIX)
 
     fun normalizeEmail(email: String): String = email.trim().lowercase()
-
-    fun normalizeEmailForInviteId(email: String): String =
-        normalizeEmail(email)
-            .replace("@", "__at__")
-            .replace(".", "__dot__")
 
     fun validateInitialPassword(password: String?): String? {
         val value = password?.trim().orEmpty()

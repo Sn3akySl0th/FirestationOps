@@ -57,21 +57,6 @@ class MemberProvisioningRulesTest {
     }
 
     @Test
-    fun canAutoProvisionFromLocal_requiresMatchingEmail() {
-        val localMember = Member(
-            id = "local-id",
-            departmentId = "dept-1",
-            email = "admin@example.com",
-            firstName = "Admin",
-            lastName = "User"
-        )
-
-        assertTrue(MemberProvisioningRules.canAutoProvisionFromLocal(localMember, "admin@example.com"))
-        assertFalse(MemberProvisioningRules.canAutoProvisionFromLocal(localMember, "other@example.com"))
-        assertFalse(MemberProvisioningRules.canAutoProvisionFromLocal(null, "admin@example.com"))
-    }
-
-    @Test
     fun deduplicateMembersByEmail_prefersFirebaseMemberOverLocalPlaceholder() {
         val localPlaceholder = Member(
             id = "user-clefebvre-id",

@@ -24,15 +24,11 @@ import com.example.firestationops.domain.model.Role
 import com.example.firestationops.domain.model.Station
 import com.example.firestationops.domain.model.SyncStatus
 import com.example.firestationops.domain.sync.LegacyFirestoreIdNormalizer
-import com.example.firestationops.domain.membership.CalhounMembershipNormalizer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 object FirestorePaths {
     fun member(uid: String) = "members/$uid"
-
-    fun memberInvite(email: String) =
-        "memberInvites/${com.example.firestationops.domain.membership.MemberProvisioningRules.normalizeEmailForInviteId(email)}"
 
     fun department(departmentId: String) = "departments/$departmentId"
 
@@ -89,11 +85,9 @@ object FirestoreMappers {
         "updatedAt" to member.updatedAt
     )
 
-    fun memberInviteToMap(member: Member, pendingMemberId: String? = null): Map<String, Any?> =
-        memberToMap(member) + mapOf("pendingMemberId" to pendingMemberId)
-
     fun departmentToMap(department: Department): Map<String, Any?> = mapOf(
         "id" to department.id,
+        "departmentId" to department.id,
         "name" to department.name,
         "stationIds" to department.stationIds,
         "createdAt" to department.createdAt,
@@ -213,26 +207,20 @@ object FirestoreMappers {
     }
 
     fun memberFromMap(id: String, data: Map<String, Any?>): Member? {
-        val rawDepartmentId = data["departmentId"] as? String ?: return null
+        val departmentId = data["departmentId"] as? String ?: return null
         val email = data["email"] as? String ?: return null
         val firstName = data["firstName"] as? String ?: return null
         val lastName = data["lastName"] as? String ?: return null
         val roles = (data["roles"] as? List<*>)?.mapNotNull { roleName ->
             (roleName as? String)?.let { runCatching { Role.valueOf(it) }.getOrNull() }
         }?.toSet() ?: setOf(Role.MEMBER)
-        val rawMemberNumber = data["memberNumber"] as? String
-        val (departmentId, memberNumber) = CalhounMembershipNormalizer.normalizeDepartmentAndMemberNumber(
-            departmentId = rawDepartmentId,
-            memberNumber = rawMemberNumber
-        )
-
         return Member(
             id = id,
             departmentId = departmentId,
             email = email,
             firstName = firstName,
             lastName = lastName,
-            memberNumber = memberNumber,
+            memberNumber = data["memberNumber"] as? String,
             roles = roles.ifEmpty { setOf(Role.MEMBER) },
             isActive = data["isActive"] as? Boolean ?: true,
             createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,

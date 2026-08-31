@@ -1,21 +1,12 @@
 const admin = require("firebase-admin");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
+const { logger } = require("firebase-functions");
+const { ALLOWED_ROLES, createMembershipService } = require("./membership");
 
 admin.initializeApp();
 
 const identityToolkitApiKey = defineSecret("IDENTITY_TOOLKIT_API_KEY");
-
-function normalizeDepartmentId(departmentId) {
-  if (typeof departmentId !== "string") {
-    return null;
-  }
-  const parsed = Number.parseInt(departmentId, 10);
-  if (!Number.isNaN(parsed) && parsed >= 200 && parsed <= 225) {
-    return "5";
-  }
-  return departmentId;
-}
 
 async function signInWithPassword(apiKey, email, password) {
   const response = await fetch(
@@ -43,18 +34,44 @@ async function signInWithPassword(apiKey, email, password) {
 async function departmentClaimForUser(localId) {
   const memberDoc = await admin.firestore().doc(`members/${localId}`).get();
   if (!memberDoc.exists) {
-    return {};
+    return null;
   }
 
-  const departmentId = normalizeDepartmentId(memberDoc.data()?.departmentId);
-  return departmentId ? { departmentId } : {};
+  const departmentId = memberDoc.data()?.departmentId;
+  const roles = memberDoc.data()?.roles;
+  const isActive = memberDoc.data()?.isActive;
+  if (memberDoc.data()?.id !== localId ||
+      typeof departmentId !== "string" ||
+      departmentId.length === 0 ||
+      !Array.isArray(roles) ||
+      roles.length === 0 ||
+      roles.some((role) => !ALLOWED_ROLES.has(role)) ||
+      typeof isActive !== "boolean") {
+    return null;
+  }
+  return { departmentId, roles, isActive };
 }
 
 async function persistDepartmentClaims(localId) {
   const claims = await departmentClaimForUser(localId);
-  await admin.auth().setCustomUserClaims(localId, claims);
+  if (!claims) {
+    await admin.auth().setCustomUserClaims(localId, {});
+    return null;
+  }
+  const user = await admin.auth().getUser(localId);
+  const existingClaims = { ...(user.customClaims || {}) };
+  delete existingClaims.departmentId;
+  delete existingClaims.roles;
+  delete existingClaims.isActive;
+  await admin.auth().setCustomUserClaims(localId, { ...existingClaims, ...claims });
   return claims;
 }
+
+const membershipService = createMembershipService({
+  auth: admin.auth(),
+  firestore: admin.firestore(),
+  logger,
+});
 
 exports.issueCustomToken = onCall(
   {
@@ -70,7 +87,10 @@ exports.issueCustomToken = onCall(
 
     const localId = await signInWithPassword(identityToolkitApiKey.value(), email, password);
     const claims = await persistDepartmentClaims(localId);
-    const customToken = await admin.auth().createCustomToken(localId, claims);
+    if (!claims || claims.isActive !== true) {
+      throw new HttpsError("permission-denied", "Active department membership required.");
+    }
+    const customToken = await admin.auth().createCustomToken(localId);
     return { customToken };
   },
 );
@@ -85,6 +105,25 @@ exports.syncMemberClaims = onCall(
     }
 
     const claims = await persistDepartmentClaims(request.auth.uid);
-    return { departmentId: claims.departmentId ?? null };
+    return {
+      departmentId: claims?.departmentId ?? null,
+      roles: claims?.roles ?? [],
+      isActive: claims?.isActive ?? false,
+    };
   },
+);
+
+exports.provisionDepartmentMember = onCall(
+  { region: "us-central1" },
+  membershipService.provisionDepartmentMember,
+);
+
+exports.updateDepartmentMember = onCall(
+  { region: "us-central1" },
+  membershipService.updateDepartmentMember,
+);
+
+exports.deactivateDepartmentMember = onCall(
+  { region: "us-central1" },
+  membershipService.deactivateDepartmentMember,
 );

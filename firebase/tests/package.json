@@ -1,0 +1,16 @@
+{
+  "name": "firestationops-firebase-tests",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 *.test.js",
+    "test:functions": "node --test --test-concurrency=1 membership-functions.test.js",
+    "test:rules": "node --test --test-concurrency=1 firestore.rules.test.js storage.rules.test.js"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.2",
+    "firebase": "12.18.0"
+  }
+}

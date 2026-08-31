@@ -5,7 +5,7 @@ import com.example.firestationops.data.firebase.FirebaseAuthRepository
 import com.example.firestationops.data.firebase.FirebaseAvailability
 import com.example.firestationops.data.firebase.FirebaseDepartmentCatalogBootstrap
 import com.example.firestationops.data.firebase.FirebaseCatalogAdminRepository
-import com.example.firestationops.data.firebase.FirebaseMemberAccountProvisioner
+import com.example.firestationops.data.firebase.FirebaseMemberFunctionsClient
 import com.example.firestationops.data.firebase.FirebaseMemberRosterRepository
 import com.example.firestationops.data.firebase.FirebaseSyncCoordinator
 import com.example.firestationops.db.DatabaseDriverFactory
@@ -59,13 +59,11 @@ class AppGraph(
     val firebaseEnabled: Boolean = FirebaseAvailability.isConfigured(context)
 
     private val localMemberRosterRepository = PersistentMemberRosterRepository(database)
-    private val memberAccountProvisioner = FirebaseMemberAccountProvisioner(context)
+    private val memberFunctionsClient = FirebaseMemberFunctionsClient()
     val memberRosterRepository: MemberRosterRepository = if (firebaseEnabled) {
         FirebaseMemberRosterRepository(
-            local = localMemberRosterRepository,
             database = database,
-            firebaseEnabled = true,
-            accountProvisioner = memberAccountProvisioner
+            functionsClient = memberFunctionsClient
         )
     } else {
         localMemberRosterRepository

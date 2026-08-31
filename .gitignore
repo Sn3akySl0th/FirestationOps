@@ -11,6 +11,8 @@ firebase-desktop.json
 **/.firestationops/firebase.json
 GoogleService-Info.plist
 firebase-debug.log
+firestore-debug.log
+ui-debug.log
 *.keystore
 *.jks
 *.p12

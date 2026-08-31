@@ -6,150 +6,277 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function memberDoc() {
-      return get(/databases/$(database)/documents/members/$(request.auth.uid));
+    function canonicalMemberPath() {
+      return /databases/$(database)/documents/members/$(request.auth.uid);
     }
 
-    function normalizedDepartmentId(departmentId) {
-      return departmentId is string
-        && departmentId.matches('^[0-9]+$')
-        && int(departmentId) >= 200
-        && int(departmentId) <= 225
-        ? '5'
-        : departmentId;
+    function hasCanonicalMembership() {
+      return signedIn() && exists(canonicalMemberPath());
     }
 
-    function memberDepartmentId() {
-      return normalizedDepartmentId(memberDoc().data.departmentId);
+    function canonicalMember() {
+      return get(canonicalMemberPath()).data;
     }
 
-    function memberRoles() {
-      return memberDoc().data.roles;
-    }
-
-    function isAdmin() {
-      return signedIn()
-        && memberRoles() is list
-        && memberRoles().hasAny(['ADMIN']);
+    function hasValidActiveMembership() {
+      return hasCanonicalMembership()
+        && canonicalMember().id == request.auth.uid
+        && canonicalMember().departmentId is string
+        && canonicalMember().departmentId.size() > 0
+        && canonicalMember().isActive == true
+        && canonicalMember().roles is list;
     }
 
     function belongsToDepartment(departmentId) {
-      return signedIn() && memberDepartmentId() == departmentId;
+      return hasValidActiveMembership()
+        && canonicalMember().departmentId == departmentId;
     }
 
-    function isPendingDepartmentMemberId(memberId) {
-      return memberId.matches('^pending-.*');
+    function hasRole(role) {
+      return hasValidActiveMembership()
+        && canonicalMember().roles.hasAny([role, 'ADMIN']);
+    }
+
+    function isAdmin() {
+      return hasRole('ADMIN');
+    }
+
+    function isApparatusOfficer() {
+      return hasRole('APPARATUS_OFFICER');
+    }
+
+    function isOfficer() {
+      return hasRole('OFFICER');
+    }
+
+    function incomingIdentityMatches(departmentId, documentId) {
+      return request.resource.data.id == documentId
+        && request.resource.data.departmentId == departmentId;
+    }
+
+    function existingDepartmentMatches(departmentId) {
+      return resource.data.departmentId == departmentId;
+    }
+
+    function incomingDepartmentMatches(departmentId) {
+      return request.resource.data.departmentId == departmentId;
     }
 
     match /members/{userId} {
-      allow read: if signedIn() && request.auth.uid == userId;
-      allow create: if signedIn()
-        && (
-          (
-            request.auth.uid == userId
-            && request.resource.data.id == userId
-            && request.resource.data.departmentId is string
-            && request.resource.data.email is string
-            && request.resource.data.firstName is string
-            && request.resource.data.lastName is string
-          )
-          || (
-            isAdmin()
-            && request.resource.data.id == userId
-            && request.resource.data.departmentId == memberDepartmentId()
-            && request.resource.data.email is string
-            && request.resource.data.firstName is string
-            && request.resource.data.lastName is string
-          )
-        );
-      // Self-service profile fixes (e.g. legacy badge number stored as departmentId).
-      // Role changes require an admin.
-      allow update: if signedIn()
-        && (
-          (
-            request.auth.uid == userId
-            && request.resource.data.id == userId
-            && request.resource.data.roles == resource.data.roles
-          )
-          || isAdmin()
-        );
-      allow delete: if false;
+      allow get: if signedIn() && request.auth.uid == userId;
+      allow list, create, update, delete: if false;
     }
 
     match /memberInvites/{inviteId} {
-      allow read: if signedIn()
-        && request.auth.token.email.lower() == resource.data.email.lower();
-      allow create, update: if isAdmin()
-        && request.resource.data.departmentId == memberDepartmentId();
-      allow delete: if isAdmin();
+      allow read, write: if false;
     }
 
     match /departments/{departmentId} {
-      allow read: if belongsToDepartment(departmentId);
-      allow create, update: if belongsToDepartment(departmentId) && isAdmin();
+      allow read: if belongsToDepartment(departmentId)
+        && existingDepartmentMatches(departmentId);
+      allow create: if belongsToDepartment(departmentId)
+        && isAdmin()
+        && incomingIdentityMatches(departmentId, departmentId);
+      allow update: if belongsToDepartment(departmentId)
+        && isAdmin()
+        && existingDepartmentMatches(departmentId)
+        && incomingDepartmentMatches(departmentId)
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if false;
 
       match /stations/{stationId} {
-        allow read: if belongsToDepartment(departmentId);
-        allow create, update: if belongsToDepartment(departmentId) && isAdmin();
+        allow read: if belongsToDepartment(departmentId)
+          && existingDepartmentMatches(departmentId);
+        allow create: if belongsToDepartment(departmentId)
+          && isAdmin()
+          && incomingIdentityMatches(departmentId, stationId);
+        allow update: if belongsToDepartment(departmentId)
+          && isAdmin()
+          && existingDepartmentMatches(departmentId)
+          && incomingDepartmentMatches(departmentId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.createdAt == resource.data.createdAt;
         allow delete: if false;
       }
 
       match /apparatus/{apparatusId} {
-        allow read: if belongsToDepartment(departmentId);
-        allow create, update: if belongsToDepartment(departmentId) && isAdmin();
+        allow read: if belongsToDepartment(departmentId)
+          && existingDepartmentMatches(departmentId);
+        allow create: if belongsToDepartment(departmentId)
+          && isAdmin()
+          && incomingIdentityMatches(departmentId, apparatusId);
+        allow update: if belongsToDepartment(departmentId)
+          && existingDepartmentMatches(departmentId)
+          && incomingDepartmentMatches(departmentId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.createdAt == resource.data.createdAt
+          && (
+            isAdmin()
+            || (
+              isApparatusOfficer()
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['status', 'updatedAt'])
+            )
+          );
         allow delete: if false;
       }
 
       match /templates/{templateId} {
-        allow read: if belongsToDepartment(departmentId);
-        allow create, update: if belongsToDepartment(departmentId) && isAdmin();
+        allow read: if belongsToDepartment(departmentId)
+          && existingDepartmentMatches(departmentId);
+        allow create: if belongsToDepartment(departmentId)
+          && isAdmin()
+          && incomingIdentityMatches(departmentId, templateId);
+        allow update: if belongsToDepartment(departmentId)
+          && isAdmin()
+          && existingDepartmentMatches(departmentId)
+          && incomingDepartmentMatches(departmentId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.createdAt == resource.data.createdAt;
         allow delete: if false;
       }
 
       match /members/{memberId} {
-        allow read: if belongsToDepartment(departmentId);
-        allow create, update: if belongsToDepartment(departmentId)
-          && (isAdmin() || request.auth.uid == memberId);
-        allow delete: if belongsToDepartment(departmentId)
-          && isAdmin()
-          && isPendingDepartmentMemberId(memberId);
+        allow read: if belongsToDepartment(departmentId)
+          && existingDepartmentMatches(departmentId);
+        allow create, update, delete: if false;
       }
 
       match /inspections/{inspectionId} {
-        allow read, create, update: if belongsToDepartment(departmentId);
+        allow read: if belongsToDepartment(departmentId)
+          && existingDepartmentMatches(departmentId);
+        allow create: if belongsToDepartment(departmentId)
+          && incomingIdentityMatches(departmentId, inspectionId)
+          && request.resource.data.startedByUserId == request.auth.uid;
+        allow update: if belongsToDepartment(departmentId)
+          && existingDepartmentMatches(departmentId)
+          && incomingDepartmentMatches(departmentId)
+          && resource.data.isFinalized != true
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.templateId == resource.data.templateId
+          && request.resource.data.apparatusId == resource.data.apparatusId
+          && request.resource.data.startedAt == resource.data.startedAt
+          && request.resource.data.startedByUserId == resource.data.startedByUserId;
         allow delete: if false;
       }
 
       match /deficiencies/{deficiencyId} {
-        allow read, create, update: if belongsToDepartment(departmentId);
+        allow read: if belongsToDepartment(departmentId)
+          && existingDepartmentMatches(departmentId);
+        allow create: if belongsToDepartment(departmentId)
+          && incomingIdentityMatches(departmentId, deficiencyId)
+          && request.resource.data.createdByUserId == request.auth.uid;
+        allow update: if belongsToDepartment(departmentId)
+          && isApparatusOfficer()
+          && existingDepartmentMatches(departmentId)
+          && incomingDepartmentMatches(departmentId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.get('inspectionId', null)
+            == resource.data.get('inspectionId', null)
+          && request.resource.data.apparatusId == resource.data.apparatusId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdByUserId == resource.data.createdByUserId;
         allow delete: if false;
       }
 
       match /attachments/{attachmentId} {
-        allow read, create, update: if belongsToDepartment(departmentId);
+        allow read: if belongsToDepartment(departmentId)
+          && existingDepartmentMatches(departmentId);
+        allow create: if belongsToDepartment(departmentId)
+          && incomingIdentityMatches(departmentId, attachmentId)
+          && request.resource.data.createdByUserId == request.auth.uid;
+        allow update: if belongsToDepartment(departmentId)
+          && existingDepartmentMatches(departmentId)
+          && incomingDepartmentMatches(departmentId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdByUserId == resource.data.createdByUserId;
         allow delete: if false;
       }
 
       match /incidents/{incidentId} {
-        allow read, create, update: if belongsToDepartment(departmentId);
+        allow read: if belongsToDepartment(departmentId)
+          && existingDepartmentMatches(departmentId);
+        allow create: if belongsToDepartment(departmentId)
+          && incomingIdentityMatches(departmentId, incidentId)
+          && request.resource.data.status == 'DRAFT'
+          && request.resource.data.createdByUserId == request.auth.uid
+          && request.resource.data.updatedByUserId == request.auth.uid;
+        allow update: if belongsToDepartment(departmentId)
+          && isOfficer()
+          && existingDepartmentMatches(departmentId)
+          && incomingDepartmentMatches(departmentId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdByUserId == resource.data.createdByUserId
+          && request.resource.data.updatedByUserId == request.auth.uid;
         allow delete: if false;
 
         match /commandLog/{entryId} {
-          allow read, create, update: if belongsToDepartment(departmentId);
-          allow delete: if false;
+          allow read: if belongsToDepartment(departmentId)
+            && existingDepartmentMatches(departmentId);
+          allow create: if belongsToDepartment(departmentId)
+            && incomingIdentityMatches(departmentId, entryId)
+            && request.resource.data.incidentId == incidentId
+            && request.resource.data.createdByUserId == request.auth.uid
+            && (
+              request.resource.data.entryType == 'LOG'
+              || (
+                request.resource.data.entryType == 'CORRECTION'
+                && isOfficer()
+                && request.resource.data.correctsEntryId is string
+              )
+            );
+          allow update, delete: if false;
         }
 
         match /unitAssignments/{assignmentId} {
-          allow read, create, update: if belongsToDepartment(departmentId);
+          allow read: if belongsToDepartment(departmentId)
+            && existingDepartmentMatches(departmentId);
+          allow create: if belongsToDepartment(departmentId)
+            && isOfficer()
+            && incomingIdentityMatches(departmentId, assignmentId)
+            && request.resource.data.incidentId == incidentId
+            && request.resource.data.assignedByUserId == request.auth.uid
+            && request.resource.data.updatedByUserId == request.auth.uid;
+          allow update: if belongsToDepartment(departmentId)
+            && isOfficer()
+            && existingDepartmentMatches(departmentId)
+            && incomingDepartmentMatches(departmentId)
+            && request.resource.data.id == resource.data.id
+            && request.resource.data.incidentId == resource.data.incidentId
+            && request.resource.data.assignedAt == resource.data.assignedAt
+            && request.resource.data.assignedByUserId == resource.data.assignedByUserId
+            && request.resource.data.updatedByUserId == request.auth.uid;
           allow delete: if false;
         }
 
         match /personnelAssignments/{assignmentId} {
-          allow read, create, update: if belongsToDepartment(departmentId);
+          allow read: if belongsToDepartment(departmentId)
+            && existingDepartmentMatches(departmentId);
+          allow create: if belongsToDepartment(departmentId)
+            && isOfficer()
+            && incomingIdentityMatches(departmentId, assignmentId)
+            && request.resource.data.incidentId == incidentId
+            && request.resource.data.assignedByUserId == request.auth.uid
+            && request.resource.data.updatedByUserId == request.auth.uid;
+          allow update: if belongsToDepartment(departmentId)
+            && isOfficer()
+            && existingDepartmentMatches(departmentId)
+            && incomingDepartmentMatches(departmentId)
+            && request.resource.data.id == resource.data.id
+            && request.resource.data.incidentId == resource.data.incidentId
+            && request.resource.data.assignedAt == resource.data.assignedAt
+            && request.resource.data.assignedByUserId == resource.data.assignedByUserId
+            && request.resource.data.updatedByUserId == request.auth.uid;
           allow delete: if false;
         }
       }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

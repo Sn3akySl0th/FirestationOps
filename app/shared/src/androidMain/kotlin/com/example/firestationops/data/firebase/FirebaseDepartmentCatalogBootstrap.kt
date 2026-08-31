@@ -82,15 +82,6 @@ class FirebaseDepartmentCatalogBootstrap(
                     uploadedCount++
                 }
 
-            database.getAllMembersByDepartment(departmentId)
-                .filter { !com.example.firestationops.domain.membership.MemberProvisioningRules.isLocalDevelopmentMemberId(it.id) }
-                .forEach { departmentMember ->
-                firestore.document(FirestorePaths.departmentMember(departmentId, departmentMember.id))
-                    .set(FirestoreMappers.memberToMap(departmentMember.copy(updatedAt = now)), SetOptions.merge())
-                    .await()
-                uploadedCount++
-            }
-
             uploadedCount
         }
     }

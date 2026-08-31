@@ -1,6 +1,5 @@
 package com.example.firestationops.data.firebase
 
-import com.example.firestationops.currentTimeMillis
 import com.example.firestationops.db.FirestationOpsDatabase
 import com.example.firestationops.domain.auth.AuthSessionRecovery
 import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
@@ -8,7 +7,6 @@ import com.example.firestationops.domain.bootstrap.DepartmentCatalogProfiles
 import com.example.firestationops.domain.membership.CalhounMembershipNormalizer
 import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.model.Member
-import com.example.firestationops.domain.model.Role
 import com.example.firestationops.domain.model.UserState
 import com.example.firestationops.domain.repository.AuthRepository
 import com.example.firestationops.domain.repository.persistent.PersistentAuthRepository
@@ -73,7 +71,7 @@ class FirebaseAuthRepository(
         return withContext(Dispatchers.Main) {
             var stage = LoginStage.AUTH
             try {
-                Log.i(TAG, "login start email=$normalizedEmail foregroundActivity=${AndroidFirebaseBootstrap.foregroundActivity() != null}")
+                Log.i(TAG, "login start foregroundActivity=${AndroidFirebaseBootstrap.foregroundActivity() != null}")
                 if (isDebugBuild) {
                     forceRecaptchaForDebug()
                 }
@@ -116,9 +114,9 @@ class FirebaseAuthRepository(
                 }
                 stage = LoginStage.PROVISION
                 val member = withContext(Dispatchers.IO) {
-                    loadOrProvisionMember(firebaseUser.uid, normalizedEmail)
+                    loadCanonicalMember(firebaseUser.uid)
                 }
-                Log.i(TAG, "member provisioned departmentId=${member.departmentId}")
+                Log.i(TAG, "canonical membership loaded uid=${member.id}")
                 MemberProvisioningRules.validateMemberProfile(member)?.let { message ->
                     error(message)
                 }
@@ -135,7 +133,7 @@ class FirebaseAuthRepository(
                     auth.signOut()
                 }
                 if (stage == LoginStage.AUTH && shouldFallbackToOffline(normalizedEmail, error)) {
-                    Log.w(TAG, "falling back to offline login for $normalizedEmail")
+                    Log.w(TAG, "falling back to offline login")
                     val offlineResult = localAuth.login(normalizedEmail, password)
                     if (offlineResult.isSuccess) {
                         mirrorLocalAuthState()
@@ -165,112 +163,15 @@ class FirebaseAuthRepository(
         return Result.success(Unit)
     }
 
-    private suspend fun loadOrProvisionMember(uid: String, email: String): Member {
+    private suspend fun loadCanonicalMember(uid: String): Member {
         val snapshot = firestore.document(FirestorePaths.member(uid))
             .get(Source.SERVER)
             .awaitOrTimeout(PROVISION_TIMEOUT_MS, "Member profile lookup")
-        if (snapshot.exists()) {
-            val rawData = snapshot.data ?: emptyMap()
-            val member = FirestoreMappers.memberFromMap(uid, rawData)
-                ?: error("Member profile is missing required fields.")
-            return finalizeMember(member, rawData["departmentId"] as? String)
+        if (!snapshot.exists()) {
+            error(MemberProvisioningRules.membershipRequiredMessage())
         }
-
-        val localMember = database.getMemberByEmail(email)?.let(CalhounMembershipNormalizer::normalize)
-        if (MemberProvisioningRules.canAutoProvisionFromLocal(localMember, email)) {
-            val now = currentTimeMillis()
-            val member = CalhounMembershipNormalizer.normalize(
-                localMember!!.copy(
-                    id = uid,
-                    email = email,
-                    updatedAt = now
-                )
-            )
-
-            firestore.document(FirestorePaths.member(uid))
-                .set(FirestoreMappers.memberToMap(member))
-                .awaitOrTimeout(PROVISION_TIMEOUT_MS, "Member profile create")
-            mirrorDepartmentMember(member)
-
-            return finalizeMember(member, localMember.departmentId)
-        }
-
-        val invitedMember = loadInvitedMember(uid, email)
-        if (invitedMember != null) {
-            return invitedMember
-        }
-
-        error(MemberProvisioningRules.membershipRequiredMessage())
-    }
-
-    private suspend fun loadInvitedMember(uid: String, email: String): Member? {
-        val inviteSnapshot = firestore.document(FirestorePaths.memberInvite(email))
-            .get(Source.SERVER)
-            .awaitOrTimeout(PROVISION_TIMEOUT_MS, "Member invite lookup")
-        if (!inviteSnapshot.exists()) return null
-
-        val inviteData = inviteSnapshot.data ?: return null
-        val departmentId = inviteData["departmentId"] as? String ?: return null
-        val pendingMemberId = inviteData["pendingMemberId"] as? String
-        val now = currentTimeMillis()
-
-        val member = CalhounMembershipNormalizer.normalize(
-            Member(
-                id = uid,
-                departmentId = departmentId,
-                email = email,
-                firstName = inviteData["firstName"] as? String ?: return null,
-                lastName = inviteData["lastName"] as? String ?: return null,
-                memberNumber = inviteData["memberNumber"] as? String,
-                roles = (inviteData["roles"] as? List<*>)?.mapNotNull { roleName ->
-                    (roleName as? String)?.let { runCatching { Role.valueOf(it) }.getOrNull() }
-                }?.toSet()?.ifEmpty { setOf(Role.MEMBER) }
-                    ?: setOf(Role.MEMBER),
-                isActive = inviteData["isActive"] as? Boolean ?: true,
-                createdAt = (inviteData["createdAt"] as? Number)?.toLong() ?: now,
-                updatedAt = now
-            )
-        )
-
-        MemberProvisioningRules.validateMemberProfile(member)?.let { message ->
-            error(message)
-        }
-
-        firestore.document(FirestorePaths.member(uid))
-            .set(FirestoreMappers.memberToMap(member))
-            .awaitOrTimeout(PROVISION_TIMEOUT_MS, "Invited member profile create")
-        mirrorDepartmentMember(member)
-
-        if (pendingMemberId != null && pendingMemberId != uid) {
-            firestore.document(FirestorePaths.departmentMember(departmentId, pendingMemberId))
-                .delete()
-                .awaitOrTimeout(PROVISION_TIMEOUT_MS, "Pending member cleanup")
-        }
-
-        firestore.document(FirestorePaths.memberInvite(email))
-            .delete()
-            .awaitOrTimeout(PROVISION_TIMEOUT_MS, "Invite cleanup")
-
-        return finalizeMember(member, departmentId)
-    }
-
-    private suspend fun finalizeMember(member: Member, rawDepartmentId: String?): Member {
-        val normalized = CalhounMembershipNormalizer.normalize(member)
-        if (rawDepartmentId != null &&
-            CalhounMembershipNormalizer.isLegacyMemberNumberUsedAsDepartmentId(rawDepartmentId)
-        ) {
-            firestore.document(FirestorePaths.member(normalized.id))
-                .set(FirestoreMappers.memberToMap(normalized))
-                .awaitOrTimeout(PROVISION_TIMEOUT_MS, "Member profile normalize")
-            mirrorDepartmentMember(normalized)
-        }
-        return normalized
-    }
-
-    private suspend fun mirrorDepartmentMember(member: Member) {
-        firestore.document(FirestorePaths.departmentMember(member.departmentId, member.id))
-            .set(FirestoreMappers.memberToMap(member))
-            .awaitOrTimeout(PROVISION_TIMEOUT_MS, "Department member mirror")
+        return FirestoreMappers.memberFromMap(uid, snapshot.data ?: emptyMap())
+            ?: error("Member profile is missing required fields.")
     }
 
     private fun shouldFallbackToOffline(email: String, error: Throwable): Boolean =
