@@ -141,9 +141,26 @@ Get local debug fingerprints:
 ./gradlew :app:androidApp:signingReport
 ```
 
-### App Check debug token (debug builds only)
+### App Check setup (required for Storage uploads in debug builds)
 
-Run the app once, then check Android logcat for `FirestationOpsFirebase` and register the printed **App Check debug token** in Firebase Console → App Check.
+Photo uploads fail with **"User does not have permission to access this object"** when Cloud Storage enforces App Check but the device cannot obtain a valid App Check token.
+
+**Step 1 — Enable the Firebase App Check API** (one-time per project):
+
+1. Open [Google Cloud → Firebase App Check API](https://console.cloud.google.com/apis/library/firebaseappcheck.googleapis.com?project=firestationops).
+2. Click **Enable** and wait a minute for propagation.
+
+**Step 2 — Register the debug secret** (once per debug install / emulator):
+
+1. Run the debug app once on the device.
+2. In logcat, find the debug secret (either tag works):
+   - `FirestationOpsFirebase` — `App Check debug secret: ...`
+   - `DebugAppCheckProvider` — `Enter this debug secret into the allow list ...`
+3. In [Firebase Console → App Check](https://console.firebase.google.com/project/firestationops/appcheck), open the Android app → **Manage debug tokens** → add that secret (UUID format, not a long JWT).
+
+**Step 3 — Retry upload** after cloud login (not offline sign-in).
+
+Until the API is enabled and the debug secret is registered, Firestore sync may work while Storage uploads fail.
 
 ### Custom token fallback (recommended for physical devices)
 

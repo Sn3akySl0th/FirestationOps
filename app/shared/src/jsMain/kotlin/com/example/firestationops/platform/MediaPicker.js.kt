@@ -6,7 +6,9 @@ import androidx.compose.runtime.remember
 class JsMediaPicker : MediaPicker {
     @Composable
     override fun registerPicker(onResult: (String?) -> Unit) {}
-    override fun launch() {}
+    override fun launchCamera() {}
+
+    override fun launchGallery() {}
 }
 
 @Composable

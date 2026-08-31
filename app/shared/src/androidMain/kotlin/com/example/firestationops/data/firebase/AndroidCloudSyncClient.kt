@@ -1,11 +1,13 @@
 package com.example.firestationops.data.firebase
 
 import android.net.Uri
+import android.util.Log
 import com.example.firestationops.data.sync.CloudDocument
 import com.example.firestationops.data.sync.CloudSyncClient
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 import java.io.File
@@ -55,11 +57,21 @@ class AndroidCloudSyncClient(
         onProgress: ((Int) -> Unit)?
     ): String {
         val reference = storage.reference.child(storagePath)
-        val uploadTask = reference.putFile(Uri.fromFile(File(localFilePath)))
+        val file = File(localFilePath)
+        val metadata = StorageMetadata.Builder()
+            .setContentType("image/jpeg")
+            .build()
+        Log.i(TAG, "upload start path=$storagePath bytes=${file.length()}")
+        val uploadTask = reference.putFile(Uri.fromFile(file), metadata)
 
         if (onProgress == null) {
-            uploadTask.await()
-            return reference.downloadUrl.await().toString()
+            try {
+                uploadTask.await()
+                return reference.downloadUrl.await().toString()
+            } catch (error: Exception) {
+                Log.e(TAG, "upload failed path=$storagePath", error)
+                throw error
+            }
         }
 
         return suspendCancellableCoroutine { continuation ->
@@ -76,7 +88,10 @@ class AndroidCloudSyncClient(
                         continuation.resume(uri.toString())
                     }
                     .addOnFailureListener { error -> continuation.resumeWithException(error) }
-            }.addOnFailureListener { error -> continuation.resumeWithException(error) }
+            }.addOnFailureListener { error ->
+                Log.e(TAG, "upload failed path=$storagePath", error)
+                continuation.resumeWithException(error)
+            }
             continuation.invokeOnCancellation { uploadTask.cancel() }
         }
     }
@@ -85,5 +100,9 @@ class AndroidCloudSyncClient(
         val file = File(localFilePath)
         file.parentFile?.mkdirs()
         storage.reference.child(storagePath).getFile(file).await()
+    }
+
+    private companion object {
+        const val TAG = "FirestationOpsStorage"
     }
 }

@@ -5,6 +5,7 @@ import com.example.firestationops.data.firebase.FirestoreMappers
 import com.example.firestationops.data.firebase.FirestorePaths
 import com.example.firestationops.domain.model.Attachment
 import com.example.firestationops.domain.sync.AttachmentUploadProgressTracker
+import com.example.firestationops.domain.sync.AttachmentSyncSupport
 import com.example.firestationops.domain.model.Deficiency
 import com.example.firestationops.domain.model.Incident
 import com.example.firestationops.domain.model.SyncStatus
@@ -675,7 +676,8 @@ class DepartmentSyncEngine(
             error("Attachment file not found at $localPath")
         }
 
-        val storagePath = FirestorePaths.attachmentStorage(attachment.departmentId, attachment.id)
+        val storageDepartmentId = AttachmentSyncSupport.storageDepartmentId(attachment.departmentId)
+        val storagePath = FirestorePaths.attachmentStorage(storageDepartmentId, attachment.id)
         try {
             AttachmentUploadProgressTracker.reportProgress(attachment.id, 0)
             val downloadUrl = cloudSyncClient.uploadStorageFile(
@@ -687,9 +689,13 @@ class DepartmentSyncEngine(
             )
 
             cloudSyncClient.setDocument(
-                FirestorePaths.attachment(attachment.departmentId, attachment.id),
+                FirestorePaths.attachment(storageDepartmentId, attachment.id),
                 FirestoreMappers.attachmentToMap(
-                    attachment.copy(remoteUrl = downloadUrl, syncStatus = SyncStatus.SYNCED)
+                    attachment.copy(
+                        departmentId = storageDepartmentId,
+                        remoteUrl = downloadUrl,
+                        syncStatus = SyncStatus.SYNCED
+                    )
                 )
             )
 
@@ -697,7 +703,7 @@ class DepartmentSyncEngine(
         } catch (error: Exception) {
             attachmentRepository.markUploadFailed(
                 id = attachment.id,
-                error = error.message ?: "Photo upload failed.",
+                error = AttachmentSyncSupport.uploadFailureMessage(error),
                 failedAt = currentTimeMillis()
             )
             throw error

@@ -141,9 +141,13 @@ fun InspectionScreen(
                                     onResponseChange = { status, severity, note ->
                                         viewModel.updateResponse(item.id, status, severity, note)
                                     },
-                                    onAddAttachment = {
+                                    onTakePhoto = {
                                         currentPickingItemId = item.id
-                                        mediaPicker.launch()
+                                        mediaPicker.launchCamera()
+                                    },
+                                    onChoosePhoto = {
+                                        currentPickingItemId = item.id
+                                        mediaPicker.launchGallery()
                                     },
                                     onRetryAttachment = viewModel::retryAttachment
                                 )
@@ -182,7 +186,8 @@ fun InspectionItemCard(
     attachmentsById: Map<String, Attachment> = emptyMap(),
     uploadProgress: Map<String, com.example.firestationops.domain.sync.AttachmentUploadProgress> = emptyMap(),
     onResponseChange: (InspectionStatus, DeficiencySeverity?, String?) -> Unit,
-    onAddAttachment: () -> Unit,
+    onTakePhoto: () -> Unit,
+    onChoosePhoto: () -> Unit,
     onRetryAttachment: (String) -> Unit = {}
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -266,12 +271,23 @@ fun InspectionItemCard(
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
-                
-                OutlinedButton(
-                    onClick = onAddAttachment,
-                    modifier = Modifier.fillMaxWidth()
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Add Photo")
+                    OutlinedButton(
+                        onClick = onTakePhoto,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Take Photo")
+                    }
+                    OutlinedButton(
+                        onClick = onChoosePhoto,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Choose Photo")
+                    }
                 }
 
                 if (response.attachmentIds.isNotEmpty()) {

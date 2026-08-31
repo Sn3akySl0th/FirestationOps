@@ -5,8 +5,10 @@ import androidx.compose.runtime.Composable
 interface MediaPicker {
     @Composable
     fun registerPicker(onResult: (String?) -> Unit)
-    
-    fun launch()
+
+    fun launchCamera()
+
+    fun launchGallery()
 }
 
 @Composable

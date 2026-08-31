@@ -107,6 +107,13 @@ class FirebaseAuthRepository(
                 }
                 Log.i(TAG, "firebase auth complete uid=${auth.currentUser?.uid}")
                 val firebaseUser = auth.currentUser ?: error("Firebase sign-in did not return a user.")
+                withContext(Dispatchers.IO) {
+                    runCatching { auth.syncMemberClaims(AUTH_TIMEOUT_MS) }
+                        .onSuccess { Log.i(TAG, "member claims synced") }
+                        .onFailure { claimsError ->
+                            Log.w(TAG, "member claims sync skipped", claimsError)
+                        }
+                }
                 stage = LoginStage.PROVISION
                 val member = withContext(Dispatchers.IO) {
                     loadOrProvisionMember(firebaseUser.uid, normalizedEmail)

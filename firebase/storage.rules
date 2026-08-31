@@ -2,18 +2,29 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    function signedIn() {
-      return request.auth != null;
+    function normalizedDepartmentId(departmentId) {
+      return departmentId is string
+        && departmentId.matches('^[0-9]+$')
+        && int(departmentId) >= 200
+        && int(departmentId) <= 225
+        ? '5'
+        : departmentId;
     }
 
     function memberDepartmentId() {
-      return firestore.get(/databases/(default)/documents/members/$(request.auth.uid)).data.departmentId;
+      return request.auth != null && request.auth.token.departmentId is string
+        ? normalizedDepartmentId(request.auth.token.departmentId)
+        : '';
+    }
+
+    function belongsToDepartment(departmentId) {
+      return request.auth != null
+        && memberDepartmentId() == normalizedDepartmentId(departmentId);
     }
 
     match /departments/{departmentId}/attachments/{attachmentId} {
-      allow read: if signedIn() && memberDepartmentId() == departmentId;
-      allow write: if signedIn()
-        && memberDepartmentId() == departmentId
+      allow read: if belongsToDepartment(departmentId);
+      allow write: if belongsToDepartment(departmentId)
         && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }

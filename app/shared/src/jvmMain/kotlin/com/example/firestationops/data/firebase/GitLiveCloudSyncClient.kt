@@ -4,6 +4,7 @@ import android.net.Uri
 import com.example.firestationops.data.sync.CloudDocument
 import com.example.firestationops.data.sync.CloudSyncClient
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
 import kotlinx.coroutines.tasks.await
 import java.io.File
 
@@ -30,8 +31,11 @@ class GitLiveCloudSyncClient : CloudSyncClient {
         onProgress: ((Int) -> Unit)?
     ): String {
         val reference = storage.reference.child(storagePath)
+        val metadata = StorageMetadata.Builder()
+            .setContentType("image/jpeg")
+            .build()
         onProgress?.invoke(0)
-        reference.putFile(Uri.fromFile(File(localFilePath))).await()
+        reference.putFile(Uri.fromFile(File(localFilePath)), metadata).await()
         onProgress?.invoke(100)
         return reference.downloadUrl.await().toString()
     }
