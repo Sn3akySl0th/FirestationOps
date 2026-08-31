@@ -39,7 +39,8 @@ fun DashboardScreen(
     onOpenIncidentsClick: () -> Unit = {},
     showDepartmentSettings: Boolean = false,
     onOpenDepartmentSettings: () -> Unit = {},
-    onSyncNowClick: () -> Unit = {}
+    onSyncNowClick: () -> Unit = {},
+    onOpenSyncConflictsClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val syncMessage by viewModel.syncMessage.collectAsState()
@@ -75,7 +76,8 @@ fun DashboardScreen(
                     viewModel.syncNow()
                     onSyncNowClick()
                 },
-                onDismissSyncMessage = viewModel::clearSyncMessage
+                onDismissSyncMessage = viewModel::clearSyncMessage,
+                onOpenSyncConflictsClick = onOpenSyncConflictsClick
             )
         }
     }
@@ -95,7 +97,8 @@ private fun DashboardContent(
     showDepartmentSettings: Boolean,
     onOpenDepartmentSettings: () -> Unit,
     onSyncNowClick: () -> Unit,
-    onDismissSyncMessage: () -> Unit
+    onDismissSyncMessage: () -> Unit,
+    onOpenSyncConflictsClick: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -136,7 +139,8 @@ private fun DashboardContent(
                         onOpenIncidentsClick,
                         showDepartmentSettings,
                         onOpenDepartmentSettings,
-                        onSyncNowClick
+                        onSyncNowClick,
+                        onOpenSyncConflictsClick
                     )
                 }
                 LazyColumn(
@@ -163,7 +167,8 @@ private fun DashboardContent(
                     onOpenIncidentsClick,
                     showDepartmentSettings,
                     onOpenDepartmentSettings,
-                    onSyncNowClick
+                    onSyncNowClick,
+                    onOpenSyncConflictsClick
                 )
                 item { StationsSection(state.stations, onApparatusClick) }
             }
@@ -183,7 +188,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dashboardMainItems(
     onOpenIncidentsClick: () -> Unit,
     showDepartmentSettings: Boolean,
     onOpenDepartmentSettings: () -> Unit,
-    onSyncNowClick: () -> Unit
+    onSyncNowClick: () -> Unit,
+    onOpenSyncConflictsClick: () -> Unit
 ) {
     item {
         Text("Officer Dashboard", style = MaterialTheme.typography.headlineMedium)
@@ -217,6 +223,32 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dashboardMainItems(
                 syncQueue = state.syncQueue,
                 lastSyncResult = lastSyncResult
             )
+        }
+    }
+    if (state.syncConflictCount > 0) {
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { onOpenSyncConflictsClick() },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Sync conflicts need review",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Text(
+                        "${state.syncConflictCount} record${if (state.syncConflictCount == 1) "" else "s"} changed on this device and in the cloud.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Text(
+                        "Review conflicts",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
         }
     }
     item {

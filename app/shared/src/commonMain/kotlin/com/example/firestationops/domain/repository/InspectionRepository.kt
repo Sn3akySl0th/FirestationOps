@@ -19,4 +19,5 @@ interface InspectionRepository {
     suspend fun getLatestFinalizedInspection(apparatusId: String): Result<Inspection?>
     suspend fun getPendingSyncInspections(): Result<List<Inspection>>
     suspend fun updateSyncStatus(id: String, syncStatus: SyncStatus): Result<Unit>
+    suspend fun removeUnsyncedInspection(id: String): Result<Unit>
 }

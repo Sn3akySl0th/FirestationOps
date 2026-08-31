@@ -10,7 +10,24 @@ FirestationOps is offline-first. Operational writes are saved locally first, the
 | `PENDING_SYNC` | Queued for upload to Firebase. |
 | `SYNCED` | Confirmed uploaded to Firestore/Storage. |
 | `SYNC_FAILED` | Upload failed; retry on next sync. |
-| `CONFLICT` | Reserved for future conflict resolution. |
+| `CONFLICT` | Local and cloud versions diverged; officer must choose which version to keep. |
+
+Duplicate finalized inspections for the same apparatus and template within the template frequency window are also flagged as conflicts during upload.
+
+## Conflict resolution
+
+When a device uploads a changed deficiency or incident, sync compares three versions:
+
+1. **Baseline** — the last version this device successfully synced.
+2. **Local** — the pending change on this device.
+3. **Remote** — the current cloud copy.
+
+If local and remote both differ from baseline, the record is marked `CONFLICT` instead of overwriting the cloud copy. Officers review conflicts from the dashboard **Review conflicts** screen and choose **Keep this device** or **Keep cloud**.
+
+- **Keep this device** restores `PENDING_SYNC` so the chosen local version can upload on the next sync.
+- **Keep cloud** applies the remote version locally and marks it `SYNCED`.
+
+Finalized inspections remain append-only and are not merged through this workflow.
 
 ## Write path
 

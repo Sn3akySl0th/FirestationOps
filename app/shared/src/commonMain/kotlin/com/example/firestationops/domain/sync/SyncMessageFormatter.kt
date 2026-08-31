@@ -12,6 +12,8 @@ object SyncMessageFormatter {
             "Downloaded ${result.downloadedCount} record(s) from the cloud."
         result.isSuccess ->
             "Everything is already up to date."
+        result.conflictCount > 0 && result.failedCount == 0 ->
+            "${result.conflictCount} sync conflict${if (result.conflictCount == 1) "" else "s"} need officer review."
         result.hasPartialSuccess ->
             buildString {
                 append("Partial sync")

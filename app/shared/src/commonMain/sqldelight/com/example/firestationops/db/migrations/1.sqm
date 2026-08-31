@@ -1,0 +1,16 @@
+CREATE TABLE IF NOT EXISTS SyncBaselineEntity (
+    recordType TEXT NOT NULL,
+    recordId TEXT NOT NULL,
+    snapshotJson TEXT NOT NULL,
+    PRIMARY KEY(recordType, recordId)
+);
+
+CREATE TABLE IF NOT EXISTS SyncConflictEntity (
+    id TEXT NOT NULL PRIMARY KEY,
+    departmentId TEXT NOT NULL,
+    recordType TEXT NOT NULL,
+    recordId TEXT NOT NULL,
+    localSnapshotJson TEXT NOT NULL,
+    remoteSnapshotJson TEXT NOT NULL,
+    detectedAt INTEGER NOT NULL
+);

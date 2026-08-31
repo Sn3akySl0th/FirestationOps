@@ -96,6 +96,9 @@ class DesktopAppGraph {
         localAuthRepository
     }
 
+    val syncConflictRepository: com.example.firestationops.domain.repository.SyncConflictRepository =
+        com.example.firestationops.domain.repository.persistent.PersistentSyncConflictRepository(database)
+
     val syncCoordinator: SyncCoordinator = if (firebaseEnabled) {
         JvmFirebaseSyncCoordinator(
             firebaseEnabled = true,
@@ -103,7 +106,8 @@ class DesktopAppGraph {
             attachmentRepository = attachmentRepository,
             inspectionRepository = inspectionRepository,
             deficiencyRepository = deficiencyRepository,
-            incidentRepository = incidentRepository
+            incidentRepository = incidentRepository,
+            syncConflictRepository = syncConflictRepository
         )
     } else {
         NoOpSyncCoordinator()

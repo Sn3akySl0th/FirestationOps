@@ -9,6 +9,10 @@ class FirestationOpsDatabase(driver: SqlDriver) {
     private val database = FirestationOpsDb(driver)
     private val dbQueries = database.firestationOpsQueries
 
+    init {
+        SchemaMigration.ensureSyncConflictTables(driver)
+    }
+
     // Stations
     fun getAllStations(): List<Station> = dbQueries.selectAllStations().executeAsList().map { 
         Station(id = it.id, departmentId = it.departmentId, name = it.name, address = it.address)
@@ -69,91 +73,41 @@ class FirestationOpsDatabase(driver: SqlDriver) {
     }
 
     // Inspections
-    fun getAllInspections(): List<Inspection> = 
-        dbQueries.selectAllInspections().executeAsList().map {
-            Inspection(
-                id = it.id,
-                templateId = it.templateId,
-                apparatusId = it.apparatusId,
-                departmentId = it.departmentId,
-                startedAt = it.startedAt,
-                completedAt = it.completedAt,
-                startedByUserId = it.startedByUserId,
-                responses = Json.decodeFromString(it.responsesJson),
-                isFinalized = it.isFinalized.toInt() == 1,
-                syncStatus = SyncStatus.valueOf(it.syncStatus)
-            )
-        }
+    fun getAllInspections(): List<Inspection> =
+        dbQueries.selectAllInspections().executeAsList().map { mapInspectionRow(it) }
 
-    fun getInspectionsForApparatus(apparatusId: String): List<Inspection> = 
-        dbQueries.selectInspectionsByApparatus(apparatusId).executeAsList().map {
-            Inspection(
-                id = it.id,
-                templateId = it.templateId,
-                apparatusId = it.apparatusId,
-                departmentId = it.departmentId,
-                startedAt = it.startedAt,
-                completedAt = it.completedAt,
-                startedByUserId = it.startedByUserId,
-                responses = Json.decodeFromString(it.responsesJson),
-                isFinalized = it.isFinalized.toInt() == 1,
-                syncStatus = SyncStatus.valueOf(it.syncStatus)
-            )
-        }
+    fun getInspectionsForApparatus(apparatusId: String): List<Inspection> =
+        dbQueries.selectInspectionsByApparatus(apparatusId).executeAsList().map { mapInspectionRow(it) }
 
     fun getLatestDraftByApparatus(apparatusId: String): Inspection? =
-        dbQueries.selectLatestDraftByApparatus(apparatusId).executeAsOneOrNull()?.let {
-            Inspection(
-                id = it.id,
-                templateId = it.templateId,
-                apparatusId = it.apparatusId,
-                departmentId = it.departmentId,
-                startedAt = it.startedAt,
-                completedAt = it.completedAt,
-                startedByUserId = it.startedByUserId,
-                responses = Json.decodeFromString(it.responsesJson),
-                isFinalized = it.isFinalized.toInt() == 1,
-                syncStatus = SyncStatus.valueOf(it.syncStatus)
-            )
-        }
+        dbQueries.selectLatestDraftByApparatus(apparatusId).executeAsOneOrNull()?.let { mapInspectionRow(it) }
 
-    private fun mapInspectionRow(it: com.example.firestationops.db.InspectionEntity): Inspection =
+    private fun mapInspectionRow(row: com.example.firestationops.db.InspectionEntity): Inspection =
         Inspection(
-            id = it.id,
-            templateId = it.templateId,
-            apparatusId = it.apparatusId,
-            departmentId = it.departmentId,
-            startedAt = it.startedAt,
-            completedAt = it.completedAt,
-            startedByUserId = it.startedByUserId,
-            responses = Json.decodeFromString(it.responsesJson),
-            isFinalized = it.isFinalized.toInt() == 1,
-            syncStatus = SyncStatus.valueOf(it.syncStatus)
+            id = row.id,
+            templateId = row.templateId,
+            apparatusId = row.apparatusId,
+            departmentId = row.departmentId,
+            startedAt = row.startedAt,
+            completedAt = row.completedAt,
+            startedByUserId = row.startedByUserId,
+            responses = Json.decodeFromString(row.responsesJson),
+            isFinalized = row.isFinalized.toInt() == 1,
+            syncStatus = SyncStatus.valueOf(row.syncStatus),
+            voidedAt = row.voidedAt,
+            voidedReason = row.voidedReason
         )
 
     fun getInspectionsByDepartment(departmentId: String): List<Inspection> =
-        dbQueries.selectInspectionsByDepartment(departmentId).executeAsList().map(::mapInspectionRow)
+        dbQueries.selectInspectionsByDepartment(departmentId).executeAsList().map { mapInspectionRow(it) }
 
     fun getInspectionById(id: String): Inspection? =
-        dbQueries.selectInspectionById(id).executeAsOneOrNull()?.let { row ->
-            mapInspectionRow(row)
-        }
+        dbQueries.selectInspectionById(id).executeAsOneOrNull()?.let { mapInspectionRow(it) }
 
     fun getLatestFinalizedByApparatus(apparatusId: String): Inspection? =
-        dbQueries.selectLatestFinalizedByApparatus(apparatusId).executeAsOneOrNull()?.let { row ->
-            Inspection(
-                id = row.id,
-                templateId = row.templateId,
-                apparatusId = row.apparatusId,
-                departmentId = row.departmentId,
-                startedAt = row.startedAt,
-                completedAt = row.completedAt,
-                startedByUserId = row.startedByUserId,
-                responses = Json.decodeFromString(row.responsesJson),
-                isFinalized = row.isFinalized.toInt() == 1,
-                syncStatus = SyncStatus.valueOf(row.syncStatus)
-            )
-        }
+        getInspectionsForApparatus(apparatusId)
+            .filter { it.isFinalized && it.completedAt != null && it.voidedAt == null }
+            .maxByOrNull { it.completedAt!! }
 
     fun insertInspection(inspection: Inspection) {
         dbQueries.insertInspection(
@@ -166,8 +120,14 @@ class FirestationOpsDatabase(driver: SqlDriver) {
             startedByUserId = inspection.startedByUserId,
             responsesJson = Json.encodeToString(inspection.responses),
             isFinalized = if (inspection.isFinalized) 1 else 0,
-            syncStatus = inspection.syncStatus.name
+            syncStatus = inspection.syncStatus.name,
+            voidedAt = inspection.voidedAt,
+            voidedReason = inspection.voidedReason
         )
+    }
+
+    fun deleteInspectionById(id: String) {
+        dbQueries.deleteInspectionById(id)
     }
 
     fun updateInspectionSyncStatus(id: String, syncStatus: SyncStatus) {
@@ -175,20 +135,7 @@ class FirestationOpsDatabase(driver: SqlDriver) {
     }
 
     fun getPendingSyncInspections(): List<Inspection> =
-        dbQueries.selectPendingSyncInspections().executeAsList().map {
-            Inspection(
-                id = it.id,
-                templateId = it.templateId,
-                apparatusId = it.apparatusId,
-                departmentId = it.departmentId,
-                startedAt = it.startedAt,
-                completedAt = it.completedAt,
-                startedByUserId = it.startedByUserId,
-                responses = Json.decodeFromString(it.responsesJson),
-                isFinalized = it.isFinalized.toInt() == 1,
-                syncStatus = SyncStatus.valueOf(it.syncStatus)
-            )
-        }
+        dbQueries.selectPendingSyncInspections().executeAsList().map { mapInspectionRow(it) }
 
     // Deficiencies
     fun getAllDeficiencies(): List<Deficiency> =
@@ -265,6 +212,10 @@ class FirestationOpsDatabase(driver: SqlDriver) {
 
     fun updateDeficiencySyncStatus(id: String, syncStatus: SyncStatus) {
         dbQueries.updateDeficiencySyncStatus(syncStatus = syncStatus.name, id = id)
+    }
+
+    fun voidDeficienciesByInspectionId(inspectionId: String) {
+        dbQueries.voidDeficienciesByInspectionId(inspectionId)
     }
 
     fun getPendingSyncDeficiencies(): List<Deficiency> =
@@ -678,4 +629,57 @@ class FirestationOpsDatabase(driver: SqlDriver) {
     fun updatePersonnelAssignmentSyncStatus(id: String, syncStatus: SyncStatus) {
         dbQueries.updatePersonnelAssignmentSyncStatus(syncStatus = syncStatus.name, id = id)
     }
+
+    fun getSyncBaselineSnapshot(recordType: String, recordId: String): String? =
+        dbQueries.selectSyncBaseline(recordType = recordType, recordId = recordId).executeAsOneOrNull()
+
+    fun upsertSyncBaseline(recordType: String, recordId: String, snapshotJson: String) {
+        dbQueries.upsertSyncBaseline(recordType = recordType, recordId = recordId, snapshotJson = snapshotJson)
+    }
+
+    fun deleteSyncBaseline(recordType: String, recordId: String) {
+        dbQueries.deleteSyncBaseline(recordType = recordType, recordId = recordId)
+    }
+
+    fun getAllSyncConflicts(): List<com.example.firestationops.domain.sync.SyncConflict> =
+        dbQueries.selectAllSyncConflicts().executeAsList().map(::mapSyncConflictRow)
+
+    fun getSyncConflictsByDepartment(departmentId: String): List<com.example.firestationops.domain.sync.SyncConflict> =
+        dbQueries.selectSyncConflictsByDepartment(departmentId = departmentId).executeAsList().map(::mapSyncConflictRow)
+
+    fun getSyncConflictByRecord(recordType: String, recordId: String): com.example.firestationops.domain.sync.SyncConflict? =
+        dbQueries.selectSyncConflictByRecord(recordType = recordType, recordId = recordId)
+            .executeAsOneOrNull()
+            ?.let(::mapSyncConflictRow)
+
+    fun insertSyncConflict(conflict: com.example.firestationops.domain.sync.SyncConflict) {
+        dbQueries.insertSyncConflict(
+            id = conflict.id,
+            departmentId = conflict.departmentId,
+            recordType = conflict.recordType.name,
+            recordId = conflict.recordId,
+            localSnapshotJson = conflict.localSnapshotJson,
+            remoteSnapshotJson = conflict.remoteSnapshotJson,
+            detectedAt = conflict.detectedAt
+        )
+    }
+
+    fun deleteSyncConflict(id: String) {
+        dbQueries.deleteSyncConflict(id = id)
+    }
+
+    fun deleteSyncConflictByRecord(recordType: String, recordId: String) {
+        dbQueries.deleteSyncConflictByRecord(recordType = recordType, recordId = recordId)
+    }
+
+    private fun mapSyncConflictRow(row: com.example.firestationops.db.SyncConflictEntity): com.example.firestationops.domain.sync.SyncConflict =
+        com.example.firestationops.domain.sync.SyncConflict(
+            id = row.id,
+            departmentId = row.departmentId,
+            recordType = com.example.firestationops.domain.sync.SyncConflictRecordType.valueOf(row.recordType),
+            recordId = row.recordId,
+            localSnapshotJson = row.localSnapshotJson,
+            remoteSnapshotJson = row.remoteSnapshotJson,
+            detectedAt = row.detectedAt
+        )
 }

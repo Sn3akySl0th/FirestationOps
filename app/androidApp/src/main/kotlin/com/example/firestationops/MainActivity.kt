@@ -23,6 +23,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val graph = (application as FirestationOpsApplication).appGraph
+        graph.setForegroundActivity(this)
 
         setContent {
             App(
@@ -37,6 +38,7 @@ class MainActivity : ComponentActivity() {
                 catalogAdminRepository = graph.catalogAdminRepository,
                 departmentCatalogBootstrap = graph.departmentCatalogBootstrap,
                 syncCoordinator = graph.syncCoordinator,
+                syncConflictRepository = graph.syncConflictRepository,
                 onRequestBackgroundSync = { _ ->
                     if (graph.firebaseEnabled) {
                         SyncScheduler.runNow(this@MainActivity)
@@ -45,6 +47,16 @@ class MainActivity : ComponentActivity() {
                 onPrepareDepartment = graph::prepareDepartment
             )
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        (application as FirestationOpsApplication).appGraph.setForegroundActivity(this)
+    }
+
+    override fun onPause() {
+        (application as FirestationOpsApplication).appGraph.setForegroundActivity(null)
+        super.onPause()
     }
 }
 

@@ -21,6 +21,7 @@ class DashboardViewModelTest {
     private val attachmentRepository = MockAttachmentRepository()
     private val incidentRepository = MockIncidentRepository()
     private val syncCoordinator = NoOpSyncCoordinator()
+    private val syncConflictRepository = MockSyncConflictRepository()
     private val fixedNow = 1_000_000_000_000L
 
     @Test
@@ -46,6 +47,7 @@ class DashboardViewModelTest {
             inspectionRepository = inspectionRepository,
             attachmentRepository = attachmentRepository,
             incidentRepository = incidentRepository,
+            syncConflictRepository = syncConflictRepository,
             syncCoordinator = syncCoordinator,
             nowMillis = { fixedNow }
         )
@@ -91,6 +93,7 @@ class DashboardViewModelTest {
             inspectionRepository = inspectionRepository,
             attachmentRepository = attachmentRepository,
             incidentRepository = incidentRepository,
+            syncConflictRepository = syncConflictRepository,
             syncCoordinator = syncCoordinator,
             nowMillis = { fixedNow }
         )
@@ -112,6 +115,7 @@ class DashboardViewModelTest {
             inspectionRepository = inspectionRepository,
             attachmentRepository = attachmentRepository,
             incidentRepository = incidentRepository,
+            syncConflictRepository = syncConflictRepository,
             syncCoordinator = syncCoordinator,
             nowMillis = { fixedNow }
         )
@@ -141,6 +145,7 @@ class DashboardViewModelTest {
             inspectionRepository = inspectionRepository,
             attachmentRepository = attachmentRepository,
             incidentRepository = incidentRepository,
+            syncConflictRepository = syncConflictRepository,
             syncCoordinator = syncCoordinator,
             nowMillis = { fixedNow }
         )

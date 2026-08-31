@@ -124,3 +124,48 @@ npx -y firebase-tools@latest emulators:start --only auth,firestore,storage
 ```
 
 Point the Android app at emulators during development if desired (requires additional Android emulator host configuration).
+
+## Android physical device login troubleshooting
+
+Sideloaded debug builds on some phones (especially Android 14+) can fail Firebase SDK app verification (Play Integrity + reCAPTCHA) even when email/password are correct. Symptoms: login spinner or timeout.
+
+### Required Firebase console setup
+
+1. Add **SHA-1 and SHA-256** for your debug keystore in Firebase project settings.
+2. Re-download `google-services.json` and rebuild the app.
+3. Enable the **Play Integrity API** for the project in [Google Cloud Console](https://console.cloud.google.com/apis/library/playintegrity.googleapis.com?project=firestationops).
+
+Get local debug fingerprints:
+
+```bash
+./gradlew :app:androidApp:signingReport
+```
+
+### App Check debug token (debug builds only)
+
+Run the app once, then check Android logcat for `FirestationOpsFirebase` and register the printed **App Check debug token** in Firebase Console → App Check.
+
+### Custom token fallback (recommended for physical devices)
+
+When SDK sign-in times out, the app can call a Cloud Function that verifies credentials server-side and returns a custom token (bypasses Play Integrity on the device).
+
+1. Store the Firebase Web API key as a function secret (same key as in `google-services.json`):
+
+   ```bash
+   npx -y firebase-tools@latest functions:secrets:set IDENTITY_TOOLKIT_API_KEY
+   ```
+
+2. Deploy the function:
+
+   ```bash
+   cd firebase/functions
+   npm install
+   cd ../..
+   npx -y firebase-tools@latest deploy --only functions:issueCustomToken
+   ```
+
+3. Rebuild/install the Android app and try **Login** again.
+
+### Offline sign-in
+
+Use **Sign in offline (recommended on this device)** for local-only testing when cloud sign-in is blocked. Sync will not run until Firebase authentication succeeds.

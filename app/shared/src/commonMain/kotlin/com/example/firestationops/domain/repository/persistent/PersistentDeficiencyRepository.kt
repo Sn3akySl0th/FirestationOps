@@ -89,4 +89,10 @@ class PersistentDeficiencyRepository(private val database: FirestationOpsDatabas
         refresh()
         return Result.success(Unit)
     }
+
+    override suspend fun voidDeficienciesForInspection(inspectionId: String): Result<Unit> {
+        database.voidDeficienciesByInspectionId(inspectionId)
+        refresh()
+        return Result.success(Unit)
+    }
 }

@@ -13,7 +13,9 @@ data class Inspection(
     val startedByUserId: String,
     val responses: List<InspectionResponse> = emptyList(),
     val isFinalized: Boolean = false,
-    val syncStatus: SyncStatus = SyncStatus.LOCAL_ONLY
+    val syncStatus: SyncStatus = SyncStatus.LOCAL_ONLY,
+    val voidedAt: Long? = null,
+    val voidedReason: String? = null
 )
 
 @Serializable

@@ -23,6 +23,7 @@ fun main() = application {
             catalogAdminRepository = graph.catalogAdminRepository,
             departmentCatalogBootstrap = graph.departmentCatalogBootstrap,
             syncCoordinator = graph.syncCoordinator,
+            syncConflictRepository = graph.syncConflictRepository,
             onRequestBackgroundSync = graph::requestBackgroundSync,
             onPrepareDepartment = graph::prepareDepartment
         )

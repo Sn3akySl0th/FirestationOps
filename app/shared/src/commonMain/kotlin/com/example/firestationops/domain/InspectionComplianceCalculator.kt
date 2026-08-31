@@ -26,7 +26,7 @@ object InspectionComplianceCalculator {
             .mapValues { (_, typeTemplates) -> typeTemplates.maxByOrNull { it.version } }
 
         val finalizedByApparatus = inspections
-            .filter { it.isFinalized && it.completedAt != null }
+            .filter { it.isFinalized && it.completedAt != null && it.voidedAt == null }
             .groupBy { it.apparatusId }
             .mapValues { (_, apparatusInspections) ->
                 apparatusInspections.maxByOrNull { it.completedAt!! }

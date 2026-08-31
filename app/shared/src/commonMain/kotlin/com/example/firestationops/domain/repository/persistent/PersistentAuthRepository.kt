@@ -127,6 +127,8 @@ class PersistentAuthRepository(private val database: FirestationOpsDatabase) : A
         }
     }
 
+    override suspend fun loginOffline(email: String, password: String): Result<Unit> = login(email, password)
+
     override suspend fun logout(): Result<Unit> {
         database.setSessionUserId(null)
         _userState.value = UserState.Unauthenticated

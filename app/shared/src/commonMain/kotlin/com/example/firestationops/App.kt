@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -46,6 +47,8 @@ import com.example.firestationops.ui.catalog.CatalogSettingsScreen
 import com.example.firestationops.ui.catalog.CatalogSettingsViewModel
 import com.example.firestationops.ui.department.DepartmentSettingsScreen
 import com.example.firestationops.ui.department.DepartmentSettingsViewModel
+import com.example.firestationops.ui.sync.SyncConflictScreen
+import com.example.firestationops.ui.sync.SyncConflictViewModel
 import com.example.firestationops.domain.sync.SyncCoordinator
 import com.example.firestationops.domain.sync.NoOpSyncCoordinator
 import com.example.firestationops.domain.bootstrap.NoOpDepartmentCatalogBootstrap
@@ -60,6 +63,7 @@ sealed class Screen {
     data class IncidentDetail(val incidentId: String?) : Screen()
     object DepartmentSettings : Screen()
     object CatalogSettings : Screen()
+    object SyncConflicts : Screen()
 }
 
 @Composable
@@ -75,6 +79,7 @@ fun App(
     catalogAdminRepository: CatalogAdminRepository = NoOpCatalogAdminRepository(),
     departmentCatalogBootstrap: DepartmentCatalogBootstrap = NoOpDepartmentCatalogBootstrap(),
     syncCoordinator: SyncCoordinator = NoOpSyncCoordinator(),
+    syncConflictRepository: SyncConflictRepository = com.example.firestationops.domain.repository.mock.MockSyncConflictRepository(),
     onRequestBackgroundSync: (String) -> Unit = {},
     onPrepareDepartment: (String) -> Unit = {}
 ) {
@@ -112,6 +117,7 @@ fun App(
                                     inspectionRepository = inspectionRepository,
                                     attachmentRepository = attachmentRepository,
                                     incidentRepository = incidentRepository,
+                                    syncConflictRepository = syncConflictRepository,
                                     syncCoordinator = syncCoordinator
                                 )
                             }
@@ -129,7 +135,8 @@ fun App(
                                         onOpenDepartmentSettings = { currentScreen = Screen.DepartmentSettings },
                                         onSyncNowClick = {
                                             onRequestBackgroundSync(state.member.departmentId)
-                                        }
+                                        },
+                                        onOpenSyncConflictsClick = { currentScreen = Screen.SyncConflicts }
                                     )
                                 }
                             )
@@ -241,6 +248,24 @@ fun App(
                             CatalogSettingsScreen(
                                 viewModel = catalogSettingsViewModel,
                                 onBack = { currentScreen = Screen.DepartmentSettings }
+                            )
+                        }
+                        Screen.SyncConflicts -> {
+                            val syncConflictScope = rememberCoroutineScope()
+                            val syncConflictViewModel = remember(state.member.departmentId, syncConflictScope) {
+                                SyncConflictViewModel(
+                                    departmentId = state.member.departmentId,
+                                    syncConflictRepository = syncConflictRepository,
+                                    deficiencyRepository = deficiencyRepository,
+                                    incidentRepository = incidentRepository,
+                                    inspectionRepository = inspectionRepository,
+                                    syncCoordinator = syncCoordinator,
+                                    scope = syncConflictScope
+                                )
+                            }
+                            SyncConflictScreen(
+                                viewModel = syncConflictViewModel,
+                                onBack = { currentScreen = Screen.Dashboard }
                             )
                         }
                     }

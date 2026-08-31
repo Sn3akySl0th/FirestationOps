@@ -59,4 +59,17 @@ class MockDeficiencyRepository : DeficiencyRepository {
         }
         return Result.success(Unit)
     }
+
+    override suspend fun voidDeficienciesForInspection(inspectionId: String): Result<Unit> {
+        deficiencies.update { list ->
+            list.map { deficiency ->
+                if (deficiency.inspectionId == inspectionId && deficiency.status != DeficiencyStatus.VOIDED) {
+                    deficiency.copy(status = DeficiencyStatus.VOIDED, syncStatus = SyncStatus.PENDING_SYNC)
+                } else {
+                    deficiency
+                }
+            }
+        }
+        return Result.success(Unit)
+    }
 }

@@ -1,19 +1,29 @@
 package com.example.firestationops.data.sync
 
+import com.example.firestationops.currentTimeMillis
 import com.example.firestationops.data.firebase.FirestoreMappers
 import com.example.firestationops.data.firebase.FirestorePaths
 import com.example.firestationops.domain.model.Attachment
+import com.example.firestationops.domain.model.Deficiency
+import com.example.firestationops.domain.model.Incident
 import com.example.firestationops.domain.model.SyncStatus
 import com.example.firestationops.domain.repository.AttachmentRepository
 import com.example.firestationops.domain.repository.CatalogRepository
 import com.example.firestationops.domain.repository.DeficiencyRepository
 import com.example.firestationops.domain.repository.IncidentRepository
 import com.example.firestationops.domain.repository.InspectionRepository
+import com.example.firestationops.domain.repository.SyncConflictRepository
 import com.example.firestationops.domain.sync.SyncActivityAction
 import com.example.firestationops.domain.sync.SyncActivityDirection
 import com.example.firestationops.domain.sync.SyncActivityItem
 import com.example.firestationops.domain.sync.SyncActivityRecordType
+import com.example.firestationops.domain.sync.SyncConflict
+import com.example.firestationops.domain.sync.InspectionDuplicateDetector
+import com.example.firestationops.domain.InspectionComplianceCalculator
+import com.example.firestationops.domain.sync.SyncConflictDetector
+import com.example.firestationops.domain.sync.SyncConflictRecordType
 import com.example.firestationops.domain.sync.SyncRecordDiffer
+import com.example.firestationops.domain.sync.SyncRecordSnapshot
 import com.example.firestationops.domain.sync.SyncResult
 
 class DepartmentSyncEngine(
@@ -23,12 +33,14 @@ class DepartmentSyncEngine(
     private val attachmentRepository: AttachmentRepository,
     private val inspectionRepository: InspectionRepository,
     private val deficiencyRepository: DeficiencyRepository,
-    private val incidentRepository: IncidentRepository
+    private val incidentRepository: IncidentRepository,
+    private val syncConflictRepository: SyncConflictRepository
 ) {
     suspend fun syncDepartment(departmentId: String): SyncResult {
         val downloadedItems = mutableListOf<SyncActivityItem>()
         val uploadedItems = mutableListOf<SyncActivityItem>()
         var failedCount = 0
+        var conflictCount = 0
         val errors = mutableListOf<String>()
         val collector = SyncActivityCollector(downloadedItems, uploadedItems)
 
@@ -79,19 +91,13 @@ class DepartmentSyncEngine(
             .getOrElse { emptyList() }
             .filter { it.departmentId == departmentId && it.isFinalized }
 
-        pendingInspections.forEach { inspection ->
+        pendingInspections
+            .sortedWith(compareBy<com.example.firestationops.domain.model.Inspection> { it.voidedAt == null })
+            .forEach { inspection ->
             runStep("Inspection ${inspection.id}") {
-                cloudSyncClient.setDocument(
-                    FirestorePaths.inspection(departmentId, inspection.id),
-                    FirestoreMappers.inspectionToMap(inspection)
-                )
-                inspectionRepository.updateSyncStatus(inspection.id, SyncStatus.SYNCED)
-                collector.recordUpload(
-                    recordType = SyncActivityRecordType.INSPECTION,
-                    recordId = inspection.id,
-                    title = inspectionLabel(inspection),
-                    detail = "Submitted inspection"
-                )
+                if (uploadInspection(departmentId, inspection, collector)) {
+                    conflictCount++
+                }
             }
         }
 
@@ -101,17 +107,9 @@ class DepartmentSyncEngine(
 
         pendingDeficiencies.forEach { deficiency ->
             runStep("Deficiency ${deficiency.id}") {
-                cloudSyncClient.setDocument(
-                    FirestorePaths.deficiency(departmentId, deficiency.id),
-                    FirestoreMappers.deficiencyToMap(deficiency)
-                )
-                deficiencyRepository.updateSyncStatus(deficiency.id, SyncStatus.SYNCED)
-                collector.recordUpload(
-                    recordType = SyncActivityRecordType.DEFICIENCY,
-                    recordId = deficiency.id,
-                    title = deficiency.title,
-                    detail = deficiency.severity.name.replace('_', ' ').lowercase()
-                )
+                if (uploadDeficiency(departmentId, deficiency, collector)) {
+                    conflictCount++
+                }
             }
         }
 
@@ -121,17 +119,9 @@ class DepartmentSyncEngine(
 
         pendingIncidents.forEach { incident ->
             runStep("Incident ${incident.id}") {
-                cloudSyncClient.setDocument(
-                    FirestorePaths.incident(departmentId, incident.id),
-                    FirestoreMappers.incidentToMap(incident)
-                )
-                incidentRepository.updateIncidentSyncStatus(incident.id, SyncStatus.SYNCED)
-                collector.recordUpload(
-                    recordType = SyncActivityRecordType.INCIDENT,
-                    recordId = incident.id,
-                    title = incident.title.ifBlank { "Incident report" },
-                    detail = incident.status.name.replace('_', ' ').lowercase()
-                )
+                if (uploadIncident(departmentId, incident, collector)) {
+                    conflictCount++
+                }
             }
         }
 
@@ -196,8 +186,196 @@ class DepartmentSyncEngine(
             uploadedItems = uploadedItems,
             downloadedItems = downloadedItems,
             failedCount = failedCount,
+            conflictCount = conflictCount,
             errors = errors
         )
+    }
+
+    private suspend fun uploadInspection(
+        departmentId: String,
+        inspection: com.example.firestationops.domain.model.Inspection,
+        collector: SyncActivityCollector
+    ): Boolean {
+        val remoteInspections = loadRemoteInspections(departmentId)
+        val template = catalogRepository.findTemplate(inspection.templateId)
+        val frequencyHours = template?.frequencyHours ?: InspectionComplianceCalculator.DEFAULT_FREQUENCY_HOURS
+        val duplicate = InspectionDuplicateDetector.findDuplicate(
+            local = inspection,
+            remoteInspections = remoteInspections,
+            frequencyHours = frequencyHours
+        )
+        if (duplicate != null) {
+            recordInspectionConflict(departmentId, inspection, duplicate)
+            return true
+        }
+
+        cloudSyncClient.setDocument(
+            FirestorePaths.inspection(departmentId, inspection.id),
+            FirestoreMappers.inspectionToMap(inspection)
+        )
+        inspectionRepository.updateSyncStatus(inspection.id, SyncStatus.SYNCED)
+        collector.recordUpload(
+            recordType = SyncActivityRecordType.INSPECTION,
+            recordId = inspection.id,
+            title = inspectionLabel(inspection),
+            detail = if (inspection.voidedAt != null) "Voided duplicate inspection" else "Submitted inspection"
+        )
+        return false
+    }
+
+    private suspend fun loadRemoteInspections(departmentId: String): List<com.example.firestationops.domain.model.Inspection> =
+        cloudSyncClient.listCollection("${FirestorePaths.department(departmentId)}/inspections")
+            .mapNotNull { document ->
+                FirestoreMappers.inspectionFromMap(document.id, document.data)
+            }
+
+    private suspend fun recordInspectionConflict(
+        departmentId: String,
+        local: com.example.firestationops.domain.model.Inspection,
+        remote: com.example.firestationops.domain.model.Inspection
+    ) {
+        syncConflictRepository.saveConflict(
+            SyncConflict(
+                id = "conflict-${local.id}",
+                departmentId = departmentId,
+                recordType = SyncConflictRecordType.INSPECTION,
+                recordId = local.id,
+                localSnapshotJson = SyncRecordSnapshot.encodeInspection(local),
+                remoteSnapshotJson = SyncRecordSnapshot.encodeInspection(remote),
+                detectedAt = currentTimeMillis()
+            )
+        )
+        inspectionRepository.updateSyncStatus(local.id, SyncStatus.CONFLICT)
+    }
+
+    private suspend fun uploadDeficiency(
+        departmentId: String,
+        deficiency: Deficiency,
+        collector: SyncActivityCollector
+    ): Boolean {
+        val remote = loadRemoteDeficiency(departmentId, deficiency.id)
+        val baseline = loadDeficiencyBaseline(deficiency.id)
+        if (SyncConflictDetector.isDeficiencyUploadConflict(deficiency, remote, baseline)) {
+            recordDeficiencyConflict(departmentId, deficiency, requireNotNull(remote))
+            return true
+        }
+
+        cloudSyncClient.setDocument(
+            FirestorePaths.deficiency(departmentId, deficiency.id),
+            FirestoreMappers.deficiencyToMap(deficiency)
+        )
+        deficiencyRepository.updateSyncStatus(deficiency.id, SyncStatus.SYNCED)
+        saveDeficiencyBaseline(deficiency)
+        collector.recordUpload(
+            recordType = SyncActivityRecordType.DEFICIENCY,
+            recordId = deficiency.id,
+            title = deficiency.title,
+            detail = deficiency.severity.name.replace('_', ' ').lowercase()
+        )
+        return false
+    }
+
+    private suspend fun uploadIncident(
+        departmentId: String,
+        incident: Incident,
+        collector: SyncActivityCollector
+    ): Boolean {
+        val remote = loadRemoteIncident(departmentId, incident.id)
+        val baseline = loadIncidentBaseline(incident.id)
+        if (SyncConflictDetector.isIncidentUploadConflict(incident, remote, baseline)) {
+            recordIncidentConflict(departmentId, incident, requireNotNull(remote))
+            return true
+        }
+
+        cloudSyncClient.setDocument(
+            FirestorePaths.incident(departmentId, incident.id),
+            FirestoreMappers.incidentToMap(incident)
+        )
+        incidentRepository.updateIncidentSyncStatus(incident.id, SyncStatus.SYNCED)
+        saveIncidentBaseline(incident)
+        collector.recordUpload(
+            recordType = SyncActivityRecordType.INCIDENT,
+            recordId = incident.id,
+            title = incident.title.ifBlank { "Incident report" },
+            detail = incident.status.name.replace('_', ' ').lowercase()
+        )
+        return false
+    }
+
+    private suspend fun loadRemoteDeficiency(departmentId: String, deficiencyId: String): Deficiency? {
+        val document = cloudSyncClient.getDocument(FirestorePaths.deficiency(departmentId, deficiencyId))
+        if (!document.exists) return null
+        return FirestoreMappers.deficiencyFromMap(document.id, document.data)
+    }
+
+    private suspend fun loadRemoteIncident(departmentId: String, incidentId: String): Incident? {
+        val document = cloudSyncClient.getDocument(FirestorePaths.incident(departmentId, incidentId))
+        if (!document.exists) return null
+        return FirestoreMappers.incidentFromMap(document.id, document.data)
+    }
+
+    private suspend fun loadDeficiencyBaseline(deficiencyId: String): Deficiency? =
+        syncConflictRepository
+            .getBaselineSnapshot(SyncConflictRecordType.DEFICIENCY, deficiencyId)
+            ?.let(SyncRecordSnapshot::decodeDeficiency)
+
+    private suspend fun loadIncidentBaseline(incidentId: String): Incident? =
+        syncConflictRepository
+            .getBaselineSnapshot(SyncConflictRecordType.INCIDENT, incidentId)
+            ?.let(SyncRecordSnapshot::decodeIncident)
+
+    private suspend fun saveDeficiencyBaseline(deficiency: Deficiency) {
+        syncConflictRepository.saveBaseline(
+            recordType = SyncConflictRecordType.DEFICIENCY,
+            recordId = deficiency.id,
+            snapshotJson = SyncRecordSnapshot.encodeDeficiency(deficiency)
+        )
+    }
+
+    private suspend fun saveIncidentBaseline(incident: Incident) {
+        syncConflictRepository.saveBaseline(
+            recordType = SyncConflictRecordType.INCIDENT,
+            recordId = incident.id,
+            snapshotJson = SyncRecordSnapshot.encodeIncident(incident)
+        )
+    }
+
+    private suspend fun recordDeficiencyConflict(
+        departmentId: String,
+        local: Deficiency,
+        remote: Deficiency
+    ) {
+        syncConflictRepository.saveConflict(
+            SyncConflict(
+                id = "conflict-${local.id}",
+                departmentId = departmentId,
+                recordType = SyncConflictRecordType.DEFICIENCY,
+                recordId = local.id,
+                localSnapshotJson = SyncRecordSnapshot.encodeDeficiency(local),
+                remoteSnapshotJson = SyncRecordSnapshot.encodeDeficiency(remote),
+                detectedAt = currentTimeMillis()
+            )
+        )
+        deficiencyRepository.updateSyncStatus(local.id, SyncStatus.CONFLICT)
+    }
+
+    private suspend fun recordIncidentConflict(
+        departmentId: String,
+        local: Incident,
+        remote: Incident
+    ) {
+        syncConflictRepository.saveConflict(
+            SyncConflict(
+                id = "conflict-${local.id}",
+                departmentId = departmentId,
+                recordType = SyncConflictRecordType.INCIDENT,
+                recordId = local.id,
+                localSnapshotJson = SyncRecordSnapshot.encodeIncident(local),
+                remoteSnapshotJson = SyncRecordSnapshot.encodeIncident(remote),
+                detectedAt = currentTimeMillis()
+            )
+        )
+        incidentRepository.updateIncidentSyncStatus(local.id, SyncStatus.CONFLICT)
     }
 
     private suspend fun pullDepartmentCatalog(departmentId: String, collector: SyncActivityCollector) {
@@ -324,6 +502,7 @@ class DepartmentSyncEngine(
                 detail = deficiency.status.name.replace('_', ' ').lowercase()
             ) {
                 deficiencyRepository.saveDeficiency(deficiency)
+                saveDeficiencyBaseline(deficiency)
             }
         }
     }
@@ -360,6 +539,7 @@ class DepartmentSyncEngine(
                     detail = incident.status.name.replace('_', ' ').lowercase()
                 ) {
                     incidentRepository.saveIncident(incident)
+                    saveIncidentBaseline(incident)
                 }
             }
 

@@ -31,6 +31,12 @@ class LoginViewModel(private val authRepository: AuthRepository) : ViewModel() {
         }
     }
 
+    fun loginOffline() {
+        viewModelScope.launch {
+            authRepository.loginOffline(_email.value, _password.value)
+        }
+    }
+
     fun logout() {
         viewModelScope.launch {
             authRepository.logout()

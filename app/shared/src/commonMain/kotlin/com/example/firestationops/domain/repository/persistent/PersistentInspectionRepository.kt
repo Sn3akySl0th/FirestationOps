@@ -114,4 +114,15 @@ class PersistentInspectionRepository(private val database: FirestationOpsDatabas
         refresh()
         return Result.success(Unit)
     }
+
+    override suspend fun removeUnsyncedInspection(id: String): Result<Unit> {
+        val inspection = database.getInspectionById(id)
+            ?: return Result.failure(IllegalStateException("Inspection not found."))
+        if (inspection.syncStatus == SyncStatus.SYNCED) {
+            return Result.failure(IllegalStateException("Cannot remove an inspection that is already synced."))
+        }
+        database.deleteInspectionById(id)
+        refresh()
+        return Result.success(Unit)
+    }
 }

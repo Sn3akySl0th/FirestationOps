@@ -1,0 +1,53 @@
+package com.example.firestationops.db
+
+import app.cash.sqldelight.db.SqlDriver
+
+internal object SchemaMigration {
+    fun ensureSyncConflictTables(driver: SqlDriver) {
+        driver.execute(
+            identifier = null,
+            sql = """
+                CREATE TABLE IF NOT EXISTS SyncBaselineEntity (
+                    recordType TEXT NOT NULL,
+                    recordId TEXT NOT NULL,
+                    snapshotJson TEXT NOT NULL,
+                    PRIMARY KEY(recordType, recordId)
+                );
+            """.trimIndent(),
+            parameters = 0
+        )
+        driver.execute(
+            identifier = null,
+            sql = """
+                CREATE TABLE IF NOT EXISTS SyncConflictEntity (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    departmentId TEXT NOT NULL,
+                    recordType TEXT NOT NULL,
+                    recordId TEXT NOT NULL,
+                    localSnapshotJson TEXT NOT NULL,
+                    remoteSnapshotJson TEXT NOT NULL,
+                    detectedAt INTEGER NOT NULL
+                );
+            """.trimIndent(),
+            parameters = 0
+        )
+        ensureInspectionVoidColumns(driver)
+    }
+
+    private fun ensureInspectionVoidColumns(driver: SqlDriver) {
+        runCatching {
+            driver.execute(
+                identifier = null,
+                sql = "ALTER TABLE InspectionEntity ADD COLUMN voidedAt INTEGER;",
+                parameters = 0
+            )
+        }
+        runCatching {
+            driver.execute(
+                identifier = null,
+                sql = "ALTER TABLE InspectionEntity ADD COLUMN voidedReason TEXT;",
+                parameters = 0
+            )
+        }
+    }
+}

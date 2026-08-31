@@ -35,7 +35,9 @@ CREATE TABLE InspectionEntity (
     startedByUserId TEXT NOT NULL,
     responsesJson TEXT NOT NULL,
     isFinalized INTEGER NOT NULL DEFAULT 0,
-    syncStatus TEXT NOT NULL DEFAULT 'LOCAL_ONLY'
+    syncStatus TEXT NOT NULL DEFAULT 'LOCAL_ONLY',
+    voidedAt INTEGER,
+    voidedReason TEXT
 );
 
 CREATE TABLE DeficiencyEntity (
@@ -150,6 +152,23 @@ CREATE TABLE PersonnelAssignmentEntity (
     UNIQUE(incidentId, memberId)
 );
 
+CREATE TABLE SyncBaselineEntity (
+    recordType TEXT NOT NULL,
+    recordId TEXT NOT NULL,
+    snapshotJson TEXT NOT NULL,
+    PRIMARY KEY(recordType, recordId)
+);
+
+CREATE TABLE SyncConflictEntity (
+    id TEXT NOT NULL PRIMARY KEY,
+    departmentId TEXT NOT NULL,
+    recordType TEXT NOT NULL,
+    recordId TEXT NOT NULL,
+    localSnapshotJson TEXT NOT NULL,
+    remoteSnapshotJson TEXT NOT NULL,
+    detectedAt INTEGER NOT NULL
+);
+
 -- Queries
 selectAllStations:
 SELECT * FROM StationEntity;
@@ -197,8 +216,11 @@ ORDER BY startedAt DESC
 LIMIT 1;
 
 insertInspection:
-INSERT OR REPLACE INTO InspectionEntity(id, templateId, apparatusId, departmentId, startedAt, completedAt, startedByUserId, responsesJson, isFinalized, syncStatus)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO InspectionEntity(id, templateId, apparatusId, departmentId, startedAt, completedAt, startedByUserId, responsesJson, isFinalized, syncStatus, voidedAt, voidedReason)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteInspectionById:
+DELETE FROM InspectionEntity WHERE id = ?;
 
 updateInspectionSyncStatus:
 UPDATE InspectionEntity
@@ -216,6 +238,14 @@ SELECT * FROM DeficiencyEntity WHERE apparatusId = ?;
 
 selectDeficienciesByDepartment:
 SELECT * FROM DeficiencyEntity WHERE departmentId = ?;
+
+selectDeficienciesByInspection:
+SELECT * FROM DeficiencyEntity WHERE inspectionId = ?;
+
+voidDeficienciesByInspectionId:
+UPDATE DeficiencyEntity
+SET status = 'VOIDED', syncStatus = 'PENDING_SYNC'
+WHERE inspectionId = ? AND status != 'VOIDED';
 
 insertDeficiency:
 INSERT OR REPLACE INTO DeficiencyEntity(id, inspectionId, apparatusId, departmentId, title, description, severity, status, createdAt, createdByUserId, resolvedAt, resolvedByUserId, resolutionNote, syncStatus, attachmentIdsJson)
@@ -436,3 +466,41 @@ updatePersonnelAssignmentSyncStatus:
 UPDATE PersonnelAssignmentEntity
 SET syncStatus = ?
 WHERE id = ?;
+
+selectSyncBaseline:
+SELECT snapshotJson FROM SyncBaselineEntity
+WHERE recordType = ? AND recordId = ?;
+
+upsertSyncBaseline:
+INSERT OR REPLACE INTO SyncBaselineEntity(recordType, recordId, snapshotJson)
+VALUES (?, ?, ?);
+
+deleteSyncBaseline:
+DELETE FROM SyncBaselineEntity
+WHERE recordType = ? AND recordId = ?;
+
+selectAllSyncConflicts:
+SELECT * FROM SyncConflictEntity ORDER BY detectedAt DESC;
+
+selectSyncConflictsByDepartment:
+SELECT * FROM SyncConflictEntity
+WHERE departmentId = ?
+ORDER BY detectedAt DESC;
+
+selectSyncConflictByRecord:
+SELECT * FROM SyncConflictEntity
+WHERE recordType = ? AND recordId = ?
+LIMIT 1;
+
+insertSyncConflict:
+INSERT OR REPLACE INTO SyncConflictEntity(
+    id, departmentId, recordType, recordId, localSnapshotJson, remoteSnapshotJson, detectedAt
+)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+deleteSyncConflict:
+DELETE FROM SyncConflictEntity WHERE id = ?;
+
+deleteSyncConflictByRecord:
+DELETE FROM SyncConflictEntity
+WHERE recordType = ? AND recordId = ?;

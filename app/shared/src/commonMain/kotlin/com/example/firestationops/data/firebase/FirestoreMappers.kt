@@ -250,7 +250,9 @@ object FirestoreMappers {
         "startedByUserId" to inspection.startedByUserId,
         "responsesJson" to json.encodeToString(inspection.responses),
         "isFinalized" to inspection.isFinalized,
-        "syncStatus" to SyncStatus.SYNCED.name
+        "syncStatus" to SyncStatus.SYNCED.name,
+        "voidedAt" to inspection.voidedAt,
+        "voidedReason" to inspection.voidedReason
     )
 
     fun inspectionFromMap(id: String, data: Map<String, Any?>): Inspection? {
@@ -274,7 +276,9 @@ object FirestoreMappers {
             startedByUserId = startedByUserId,
             responses = responses,
             isFinalized = data["isFinalized"] as? Boolean ?: false,
-            syncStatus = SyncStatus.SYNCED
+            syncStatus = SyncStatus.SYNCED,
+            voidedAt = (data["voidedAt"] as? Number)?.toLong(),
+            voidedReason = data["voidedReason"] as? String
         )
     }
 

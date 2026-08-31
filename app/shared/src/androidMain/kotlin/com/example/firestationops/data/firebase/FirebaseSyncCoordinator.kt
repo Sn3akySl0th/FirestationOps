@@ -21,7 +21,8 @@ class FirebaseSyncCoordinator(
     attachmentRepository: AttachmentRepository,
     inspectionRepository: InspectionRepository,
     deficiencyRepository: DeficiencyRepository,
-    incidentRepository: IncidentRepository
+    incidentRepository: IncidentRepository,
+    syncConflictRepository: com.example.firestationops.domain.repository.SyncConflictRepository
 ) : SyncCoordinator {
     private val syncEngine = DepartmentSyncEngine(
         cloudSyncClient = AndroidCloudSyncClient(),
@@ -30,7 +31,8 @@ class FirebaseSyncCoordinator(
         attachmentRepository = attachmentRepository,
         inspectionRepository = inspectionRepository,
         deficiencyRepository = deficiencyRepository,
-        incidentRepository = incidentRepository
+        incidentRepository = incidentRepository,
+        syncConflictRepository = syncConflictRepository
     )
 
     private val _syncState = MutableStateFlow(SyncRunnerState.IDLE)

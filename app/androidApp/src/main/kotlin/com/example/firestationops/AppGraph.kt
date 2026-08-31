@@ -37,7 +37,10 @@ import com.example.firestationops.domain.repository.persistent.PersistentMemberR
 import com.example.firestationops.domain.sync.NoOpSyncCoordinator
 import com.example.firestationops.domain.sync.SyncCoordinator
 
-class AppGraph(context: Context) {
+class AppGraph(
+    context: Context,
+    private val isDebugBuild: Boolean,
+) {
     val database: FirestationOpsDatabase = FirestationOpsDatabase(
         DatabaseDriverFactory(context).createDriver()
     )
@@ -98,11 +101,16 @@ class AppGraph(context: Context) {
         FirebaseAuthRepository(
             database = database,
             localAuth = localAuthRepository,
-            firebaseEnabled = true
+            firebaseEnabled = true,
+            googleApiKey = FirebaseAvailabilityHelper.googleApiKey(context),
+            isDebugBuild = isDebugBuild,
         )
     } else {
         localAuthRepository
     }
+
+    val syncConflictRepository: com.example.firestationops.domain.repository.SyncConflictRepository =
+        com.example.firestationops.domain.repository.persistent.PersistentSyncConflictRepository(database)
 
     val syncCoordinator: SyncCoordinator = if (firebaseEnabled) {
         FirebaseSyncCoordinator(
@@ -112,7 +120,8 @@ class AppGraph(context: Context) {
             attachmentRepository = attachmentRepository,
             inspectionRepository = inspectionRepository,
             deficiencyRepository = deficiencyRepository,
-            incidentRepository = incidentRepository
+            incidentRepository = incidentRepository,
+            syncConflictRepository = syncConflictRepository
         )
     } else {
         NoOpSyncCoordinator()
@@ -131,5 +140,9 @@ class AppGraph(context: Context) {
         }
         (apparatusRepository as PersistentApparatusRepository).refreshCatalog()
         (inspectionRepository as PersistentInspectionRepository).refreshCatalog()
+    }
+
+    fun setForegroundActivity(activity: android.app.Activity?) {
+        com.example.firestationops.data.firebase.AndroidFirebaseBootstrap.setForegroundActivity(activity)
     }
 }

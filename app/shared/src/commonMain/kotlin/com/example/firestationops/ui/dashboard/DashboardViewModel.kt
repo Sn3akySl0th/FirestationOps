@@ -17,6 +17,7 @@ import com.example.firestationops.domain.repository.AttachmentRepository
 import com.example.firestationops.domain.repository.DeficiencyRepository
 import com.example.firestationops.domain.repository.IncidentRepository
 import com.example.firestationops.domain.repository.InspectionRepository
+import com.example.firestationops.domain.repository.SyncConflictRepository
 import com.example.firestationops.domain.sync.PendingSyncQueueBuilder
 import com.example.firestationops.domain.sync.SyncCoordinator
 import com.example.firestationops.domain.sync.SyncMessageFormatter
@@ -39,6 +40,7 @@ class DashboardViewModel(
     private val inspectionRepository: InspectionRepository,
     private val attachmentRepository: AttachmentRepository,
     private val incidentRepository: IncidentRepository,
+    private val syncConflictRepository: SyncConflictRepository,
     private val syncCoordinator: SyncCoordinator,
     private val nowMillis: () -> Long = { currentTimeMillis() }
 ) : ViewModel() {
@@ -66,8 +68,9 @@ class DashboardViewModel(
         ) { inspections, templates, attachments ->
             Triple(inspections, templates, attachments)
         },
-        incidentRepository.getIncidentsByDepartment(departmentId)
-    ) { stationData, inspectionData, incidents ->
+        incidentRepository.getIncidentsByDepartment(departmentId),
+        syncConflictRepository.getConflictsByDepartment(departmentId)
+    ) { stationData, inspectionData, incidents, syncConflicts ->
         val (stations, apparatusList, openDeficiencies, allDeficiencies) = stationData
         val (inspections, templates, attachments) = inspectionData
         buildDashboardState(
@@ -78,7 +81,8 @@ class DashboardViewModel(
             inspections = inspections,
             templates = templates,
             attachments = attachments,
-            incidents = incidents
+            incidents = incidents,
+            syncConflictCount = syncConflicts.size
         )
     }
         .catch { emit(DashboardUiState.Error(it.message ?: "Failed to load dashboard")) }
@@ -110,7 +114,8 @@ class DashboardViewModel(
         inspections: List<com.example.firestationops.domain.model.Inspection>,
         templates: List<com.example.firestationops.domain.model.InspectionTemplate>,
         attachments: List<com.example.firestationops.domain.model.Attachment>,
-        incidents: List<com.example.firestationops.domain.model.Incident>
+        incidents: List<com.example.firestationops.domain.model.Incident>,
+        syncConflictCount: Int
     ): DashboardUiState {
         val apparatusMap = apparatusList.associateBy { it.id }
         val complianceStatuses = InspectionComplianceCalculator.calculateForDepartment(
@@ -177,13 +182,15 @@ class DashboardViewModel(
                 dueSoonCount = complianceStatuses.count { it.status == InspectionComplianceStatus.DUE_SOON },
                 openDeficiencyCount = openDeficiencies.size,
                 outOfServiceApparatusCount = apparatusList.count { it.status == ApparatusStatus.OUT_OF_SERVICE },
-                pendingSyncCount = pendingSyncCount
+                pendingSyncCount = pendingSyncCount,
+                syncConflictCount = syncConflictCount
             ),
             deficiencySummary = deficiencySummary,
             stations = stationSections,
             overdueInspections = overdueInspections,
             topDeficiencies = topDeficiencies,
             pendingSyncCount = pendingSyncCount,
+            syncConflictCount = syncConflictCount,
             syncQueue = syncQueue
         )
     }
@@ -218,6 +225,7 @@ sealed interface DashboardUiState {
         val overdueInspections: List<OverdueInspectionItem>,
         val topDeficiencies: List<DeficiencyWithApparatus>,
         val pendingSyncCount: Int,
+        val syncConflictCount: Int,
         val syncQueue: SyncQueueState
     ) : DashboardUiState
 
@@ -229,7 +237,8 @@ data class DashboardSummary(
     val dueSoonCount: Int,
     val openDeficiencyCount: Int,
     val outOfServiceApparatusCount: Int,
-    val pendingSyncCount: Int
+    val pendingSyncCount: Int,
+    val syncConflictCount: Int = 0
 )
 
 data class StationDashboardSection(

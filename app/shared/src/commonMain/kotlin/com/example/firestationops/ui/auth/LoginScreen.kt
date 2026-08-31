@@ -88,8 +88,15 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 Text("Login")
             }
         }
-        
+
         Spacer(modifier = Modifier.height(8.dp))
-        Text("Tip: Use 'error' in email to simulate failure", style = MaterialTheme.typography.bodySmall)
+
+        TextButton(
+            onClick = viewModel::loginOffline,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = userState !is UserState.Loading
+        ) {
+            Text("Sign in offline (recommended on this device)")
+        }
     }
 }

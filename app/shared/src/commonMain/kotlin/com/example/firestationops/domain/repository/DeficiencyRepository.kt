@@ -13,4 +13,5 @@ interface DeficiencyRepository {
     suspend fun resolveDeficiency(id: String, userId: String, note: String): Result<Unit>
     suspend fun getPendingSyncDeficiencies(): Result<List<Deficiency>>
     suspend fun updateSyncStatus(id: String, syncStatus: SyncStatus): Result<Unit>
+    suspend fun voidDeficienciesForInspection(inspectionId: String): Result<Unit>
 }

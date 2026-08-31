@@ -60,6 +60,9 @@ kotlin {
             implementation(libs.sqldelight.android.driver)
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.core.ktx)
+            implementation(libs.kotlinx.coroutinesPlayServices)
+            implementation("com.google.android.gms:play-services-auth:21.3.0")
+            implementation("com.google.firebase:firebase-appcheck")
         }
         
         iosMain.dependencies {
@@ -103,6 +106,7 @@ sqldelight {
     databases {
         create("FirestationOpsDb") {
             packageName.set("com.example.firestationops.db")
+            schemaOutputDirectory.set(file("src/commonMain/sqldelight/databases"))
         }
     }
 }
@@ -113,4 +117,7 @@ dependencies {
     add("androidMainImplementation", libs.firebase.auth)
     add("androidMainImplementation", libs.firebase.firestore)
     add("androidMainImplementation", libs.firebase.storage)
+    add("androidMainImplementation", "com.google.firebase:firebase-appcheck-debug")
+    add("androidMainImplementation", "com.google.firebase:firebase-functions")
+    add("androidMainImplementation", "com.google.android.play:integrity:1.4.0")
 }
