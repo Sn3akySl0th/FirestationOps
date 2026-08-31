@@ -14,6 +14,14 @@ service cloud.firestore {
       return memberDoc().data.departmentId;
     }
 
+    function memberRoles() {
+      return memberDoc().data.roles;
+    }
+
+    function isAdmin() {
+      return signedIn() && 'ADMIN' in memberRoles();
+    }
+
     function belongsToDepartment(departmentId) {
       return signedIn() && memberDepartmentId() == departmentId;
     }
@@ -27,11 +35,49 @@ service cloud.firestore {
         && request.resource.data.email is string
         && request.resource.data.firstName is string
         && request.resource.data.lastName is string;
-      allow update, delete: if false;
+      // Self-service profile fixes (e.g. legacy badge number stored as departmentId).
+      // Role changes require an admin.
+      allow update: if signedIn()
+        && (
+          (
+            request.auth.uid == userId
+            && request.resource.data.id == userId
+            && request.resource.data.roles == resource.data.roles
+          )
+          || isAdmin()
+        );
+      allow delete: if false;
     }
 
     match /departments/{departmentId} {
       allow read: if belongsToDepartment(departmentId);
+      allow create, update: if belongsToDepartment(departmentId) && isAdmin();
+      allow delete: if false;
+
+      match /stations/{stationId} {
+        allow read: if belongsToDepartment(departmentId);
+        allow create, update: if belongsToDepartment(departmentId) && isAdmin();
+        allow delete: if false;
+      }
+
+      match /apparatus/{apparatusId} {
+        allow read: if belongsToDepartment(departmentId);
+        allow create, update: if belongsToDepartment(departmentId) && isAdmin();
+        allow delete: if false;
+      }
+
+      match /templates/{templateId} {
+        allow read: if belongsToDepartment(departmentId);
+        allow create, update: if belongsToDepartment(departmentId) && isAdmin();
+        allow delete: if false;
+      }
+
+      match /members/{memberId} {
+        allow read: if belongsToDepartment(departmentId);
+        allow create, update: if belongsToDepartment(departmentId)
+          && (isAdmin() || request.auth.uid == memberId);
+        allow delete: if false;
+      }
 
       match /inspections/{inspectionId} {
         allow read, create, update: if belongsToDepartment(departmentId);

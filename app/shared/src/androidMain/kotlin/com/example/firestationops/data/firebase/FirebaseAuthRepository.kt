@@ -3,6 +3,9 @@ package com.example.firestationops.data.firebase
 import com.example.firestationops.currentTimeMillis
 import com.example.firestationops.db.FirestationOpsDatabase
 import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
+import com.example.firestationops.domain.bootstrap.DepartmentCatalogProfiles
+import com.example.firestationops.domain.membership.CalhounMembershipNormalizer
+import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.model.Member
 import com.example.firestationops.domain.model.UserState
 import com.example.firestationops.domain.repository.AuthRepository
@@ -44,8 +47,12 @@ class FirebaseAuthRepository(
             return
         }
 
-        val cachedMember = database.getMemberById(firebaseUser.uid)
+        val cachedMember = database.getMemberById(firebaseUser.uid)?.let(CalhounMembershipNormalizer::normalize)
         if (cachedMember != null) {
+            MemberProvisioningRules.validateMemberProfile(cachedMember)?.let { message ->
+                _userState.value = UserState.Error(message)
+                return
+            }
             database.setSessionUserId(cachedMember.id)
             _userState.value = UserState.Authenticated(cachedMember)
         }
@@ -65,9 +72,14 @@ class FirebaseAuthRepository(
             auth.signInWithEmailAndPassword(normalizedEmail, password).await()
             val firebaseUser = auth.currentUser ?: error("Firebase sign-in did not return a user.")
             val member = loadOrProvisionMember(firebaseUser.uid, normalizedEmail)
-            database.insertMember(member)
+            MemberProvisioningRules.validateMemberProfile(member)?.let { message ->
+                error(message)
+            }
+            database.upsertCanonicalMember(member)
             database.setSessionUserId(member.id)
-            DemoDepartmentSeeder.ensureDemoData(database, member.departmentId)
+            if (DepartmentCatalogProfiles.profileFor(member.departmentId) != null) {
+                DemoDepartmentSeeder.ensureDemoData(database, member.departmentId)
+            }
             _userState.value = UserState.Authenticated(member)
         }.onFailure { error ->
             _userState.value = UserState.Error(error.message ?: "Sign-in failed.")
@@ -88,35 +100,50 @@ class FirebaseAuthRepository(
     private suspend fun loadOrProvisionMember(uid: String, email: String): Member {
         val snapshot = firestore.document(FirestorePaths.member(uid)).get().await()
         if (snapshot.exists()) {
-            val data = snapshot.data ?: emptyMap()
-            return FirestoreMappers.memberFromMap(uid, data)
+            val rawData = snapshot.data ?: emptyMap()
+            val member = FirestoreMappers.memberFromMap(uid, rawData)
                 ?: error("Member profile is missing required fields.")
+            return finalizeMember(member, rawData["departmentId"] as? String)
         }
 
-        val localMember = database.getMemberByEmail(email)
-        val now = currentTimeMillis()
-        val member = if (localMember != null) {
-            localMember.copy(
-                id = uid,
-                email = email,
-                updatedAt = now
-            )
-        } else {
-            Member(
-                id = uid,
-                departmentId = "mock-dept-id",
-                email = email,
-                firstName = "Member",
-                lastName = "User",
-                createdAt = now,
-                updatedAt = now
-            )
+        val localMember = database.getMemberByEmail(email)?.let(CalhounMembershipNormalizer::normalize)
+        if (!MemberProvisioningRules.canAutoProvisionFromLocal(localMember, email)) {
+            error(MemberProvisioningRules.membershipRequiredMessage())
         }
+
+        val now = currentTimeMillis()
+        val member = CalhounMembershipNormalizer.normalize(
+            localMember!!.copy(
+                id = uid,
+                email = email,
+                updatedAt = now
+            )
+        )
 
         firestore.document(FirestorePaths.member(uid))
             .set(FirestoreMappers.memberToMap(member))
             .await()
+        mirrorDepartmentMember(member)
 
-        return member
+        return finalizeMember(member, localMember!!.departmentId)
+    }
+
+    private suspend fun finalizeMember(member: Member, rawDepartmentId: String?): Member {
+        val normalized = CalhounMembershipNormalizer.normalize(member)
+        if (rawDepartmentId != null &&
+            CalhounMembershipNormalizer.isLegacyMemberNumberUsedAsDepartmentId(rawDepartmentId)
+        ) {
+            firestore.document(FirestorePaths.member(normalized.id))
+                .set(FirestoreMappers.memberToMap(normalized))
+                .await()
+            mirrorDepartmentMember(normalized)
+        }
+        return normalized
+    }
+
+    private suspend fun mirrorDepartmentMember(member: Member) {
+        firestore.document(FirestorePaths.departmentMember(member.departmentId, member.id))
+            .set(FirestoreMappers.memberToMap(member))
+            .await()
     }
 }

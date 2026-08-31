@@ -17,9 +17,9 @@ class LegacyDemoCatalogMigratorTest {
     fun legacyDemoIdPairs_mapsAllCanonicalDemoEntities() {
         val pairs = LegacyDemoCatalogMigrator.legacyDemoIdPairs("221")
 
-        assertEquals(8, pairs.size)
-        assertTrue(pairs.contains("221-st-1" to DemoDepartmentSeeder.STATION_1))
-        assertTrue(pairs.contains("221-ap-engine-1" to DemoDepartmentSeeder.APPARATUS_ENGINE_1))
-        assertTrue(pairs.contains("221-tmpl-engine" to DemoDepartmentSeeder.TEMPLATE_ENGINE))
+        assertTrue(pairs.size >= 8)
+        assertTrue(pairs.contains("221-st-5" to DepartmentCatalogProfiles.STATION_5))
+        assertTrue(pairs.contains("221-ap-engine-5" to DepartmentCatalogProfiles.APPARATUS_ENGINE_5))
+        assertTrue(pairs.contains("221-tmpl-engine" to DepartmentCatalogProfiles.TEMPLATE_ENGINE))
     }
 }

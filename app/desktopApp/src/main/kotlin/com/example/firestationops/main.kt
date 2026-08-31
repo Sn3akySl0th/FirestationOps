@@ -11,6 +11,7 @@ import com.example.firestationops.domain.repository.persistent.PersistentInspect
 import com.example.firestationops.domain.repository.persistent.PersistentAttachmentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentIncidentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentDepartmentRepository
+import com.example.firestationops.domain.bootstrap.NoOpDepartmentCatalogBootstrap
 import com.example.firestationops.domain.sync.NoOpSyncCoordinator
 
 fun main() = application {
@@ -37,7 +38,12 @@ fun main() = application {
             attachmentRepository = attachmentRepository,
             incidentRepository = incidentRepository,
             departmentRepository = departmentRepository,
-            syncCoordinator = NoOpSyncCoordinator()
+            departmentCatalogBootstrap = NoOpDepartmentCatalogBootstrap(),
+            syncCoordinator = NoOpSyncCoordinator(),
+            onPrepareDepartment = { departmentId ->
+                (apparatusRepository as PersistentApparatusRepository).ensureDepartmentData(departmentId)
+                (inspectionRepository as PersistentInspectionRepository).ensureDepartmentData(departmentId)
+            }
         )
     }
 }

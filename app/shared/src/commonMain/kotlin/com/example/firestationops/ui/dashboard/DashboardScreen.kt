@@ -31,6 +31,8 @@ fun DashboardScreen(
     onOpenDeficienciesClick: () -> Unit,
     onDeficiencyClick: (String) -> Unit = {},
     onOpenIncidentsClick: () -> Unit = {},
+    showDepartmentSettings: Boolean = false,
+    onOpenDepartmentSettings: () -> Unit = {},
     onSyncNowClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -59,6 +61,8 @@ fun DashboardScreen(
                 onOpenDeficienciesClick = onOpenDeficienciesClick,
                 onDeficiencyClick = onDeficiencyClick,
                 onOpenIncidentsClick = onOpenIncidentsClick,
+                showDepartmentSettings = showDepartmentSettings,
+                onOpenDepartmentSettings = onOpenDepartmentSettings,
                 onSyncNowClick = {
                     viewModel.syncNow()
                     onSyncNowClick()
@@ -79,6 +83,8 @@ private fun DashboardContent(
     onOpenDeficienciesClick: () -> Unit,
     onDeficiencyClick: (String) -> Unit,
     onOpenIncidentsClick: () -> Unit,
+    showDepartmentSettings: Boolean,
+    onOpenDepartmentSettings: () -> Unit,
     onSyncNowClick: () -> Unit,
     onDismissSyncMessage: () -> Unit
 ) {
@@ -118,6 +124,8 @@ private fun DashboardContent(
                         onOpenDeficienciesClick,
                         onDeficiencyClick,
                         onOpenIncidentsClick,
+                        showDepartmentSettings,
+                        onOpenDepartmentSettings,
                         onSyncNowClick
                     )
                 }
@@ -142,6 +150,8 @@ private fun DashboardContent(
                     onOpenDeficienciesClick,
                     onDeficiencyClick,
                     onOpenIncidentsClick,
+                    showDepartmentSettings,
+                    onOpenDepartmentSettings,
                     onSyncNowClick
                 )
                 item { StationsSection(state.stations, onApparatusClick) }
@@ -159,10 +169,27 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dashboardMainItems(
     onOpenDeficienciesClick: () -> Unit,
     onDeficiencyClick: (String) -> Unit,
     onOpenIncidentsClick: () -> Unit,
+    showDepartmentSettings: Boolean,
+    onOpenDepartmentSettings: () -> Unit,
     onSyncNowClick: () -> Unit
 ) {
     item {
         Text("Officer Dashboard", style = MaterialTheme.typography.headlineMedium)
+    }
+    if (showDepartmentSettings) {
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { onOpenDepartmentSettings() }
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Department settings", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "View members and bootstrap the cloud catalog for new departments.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
     }
     if (cloudSyncEnabled || state.summary.pendingSyncCount > 0 || syncState == SyncRunnerState.RUNNING) {
         item {

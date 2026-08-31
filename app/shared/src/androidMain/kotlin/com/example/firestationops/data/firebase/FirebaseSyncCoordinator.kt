@@ -2,6 +2,7 @@ package com.example.firestationops.data.firebase
 
 import com.example.firestationops.domain.model.SyncStatus
 import com.example.firestationops.domain.repository.AttachmentRepository
+import com.example.firestationops.domain.repository.CatalogRepository
 import com.example.firestationops.domain.repository.DeficiencyRepository
 import com.example.firestationops.domain.repository.IncidentRepository
 import com.example.firestationops.domain.repository.InspectionRepository
@@ -19,6 +20,7 @@ import java.io.File
 
 class FirebaseSyncCoordinator(
     private val firebaseEnabled: Boolean,
+    private val catalogRepository: CatalogRepository,
     private val attachmentRepository: AttachmentRepository,
     private val inspectionRepository: InspectionRepository,
     private val deficiencyRepository: DeficiencyRepository,
@@ -52,6 +54,10 @@ class FirebaseSyncCoordinator(
             }
         }
 
+        runStep("Download department catalog") {
+            downloadedCount += pullDepartmentCatalog(departmentId)
+            catalogRepository.notifyCatalogUpdated()
+        }
         runStep("Download inspections") {
             downloadedCount += pullInspections(departmentId)
         }
@@ -164,6 +170,68 @@ class FirebaseSyncCoordinator(
             failedCount = failedCount,
             errors = errors
         )
+    }
+
+    private suspend fun pullDepartmentCatalog(departmentId: String): Int {
+        var count = 0
+
+        val departmentSnapshot = firestore.document(FirestorePaths.department(departmentId)).get().await()
+        if (departmentSnapshot.exists()) {
+            val department = FirestoreMappers.departmentFromMap(
+                id = departmentId,
+                data = departmentSnapshot.data ?: emptyMap()
+            )
+            if (department != null) {
+                catalogRepository.applyDepartment(department)
+                count++
+            }
+        }
+
+        val stationSnapshot = firestore.collection("departments")
+            .document(departmentId)
+            .collection("stations")
+            .get()
+            .await()
+        for (document in stationSnapshot.documents) {
+            val station = FirestoreMappers.stationFromMap(document.id, document.data ?: continue) ?: continue
+            catalogRepository.applyStation(station)
+            count++
+        }
+
+        val apparatusSnapshot = firestore.collection("departments")
+            .document(departmentId)
+            .collection("apparatus")
+            .get()
+            .await()
+        for (document in apparatusSnapshot.documents) {
+            val apparatus = FirestoreMappers.apparatusFromMap(document.id, document.data ?: continue) ?: continue
+            catalogRepository.applyApparatus(apparatus)
+            count++
+        }
+
+        val templateSnapshot = firestore.collection("departments")
+            .document(departmentId)
+            .collection("templates")
+            .get()
+            .await()
+        for (document in templateSnapshot.documents) {
+            val template = FirestoreMappers.templateFromMap(document.id, document.data ?: continue) ?: continue
+            catalogRepository.applyTemplate(template)
+            count++
+        }
+
+        val memberSnapshot = firestore.collection("departments")
+            .document(departmentId)
+            .collection("members")
+            .get()
+            .await()
+        for (document in memberSnapshot.documents) {
+            val member = FirestoreMappers.memberFromMap(document.id, document.data ?: continue) ?: continue
+            catalogRepository.applyMember(member)
+            count++
+        }
+
+        return count
     }
 
     private suspend fun pullInspections(departmentId: String): Int {

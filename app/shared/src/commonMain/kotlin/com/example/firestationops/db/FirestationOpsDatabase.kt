@@ -366,58 +366,52 @@ class FirestationOpsDatabase(driver: SqlDriver) {
 
     // Members
     fun getMemberByEmail(email: String): Member? = dbQueries.selectMemberByEmail(email).executeAsOneOrNull()?.let {
-        Member(
-            id = it.id,
-            departmentId = it.departmentId,
-            email = it.email,
-            firstName = it.firstName,
-            lastName = it.lastName,
-            roles = Json.decodeFromString(it.rolesJson),
-            isActive = it.isActive.toInt() == 1,
-            createdAt = it.createdAt,
-            updatedAt = it.updatedAt
-        )
+        mapMemberRow(it)
     }
 
     fun getMemberById(id: String): Member? = dbQueries.selectMemberById(id).executeAsOneOrNull()?.let {
-        Member(
-            id = it.id,
-            departmentId = it.departmentId,
-            email = it.email,
-            firstName = it.firstName,
-            lastName = it.lastName,
-            roles = Json.decodeFromString(it.rolesJson),
-            isActive = it.isActive.toInt() == 1,
-            createdAt = it.createdAt,
-            updatedAt = it.updatedAt
-        )
+        mapMemberRow(it)
     }
 
     fun getAllMembersByDepartment(departmentId: String): List<Member> = dbQueries.selectAllMembersByDepartment(departmentId).executeAsList().map {
+        mapMemberRow(it)
+    }
+
+    private fun mapMemberRow(it: com.example.firestationops.db.MemberEntity): Member =
         Member(
             id = it.id,
             departmentId = it.departmentId,
             email = it.email,
             firstName = it.firstName,
             lastName = it.lastName,
+            memberNumber = it.memberNumber,
             roles = Json.decodeFromString(it.rolesJson),
             isActive = it.isActive.toInt() == 1,
             createdAt = it.createdAt,
             updatedAt = it.updatedAt
         )
-    }
 
     fun insertMember(member: Member) {
+        upsertCanonicalMember(member)
+    }
+
+    fun upsertCanonicalMember(member: Member) {
+        val normalized = com.example.firestationops.domain.membership.CalhounMembershipNormalizer.normalize(member)
+        dbQueries.deleteMembersWithEmailExceptId(
+            email = normalized.email,
+            id = normalized.id
+        )
         dbQueries.insertMember(
-            id = member.id,
-            departmentId = member.departmentId,
-            email = member.email,
-            firstName = member.firstName,
-            lastName = member.lastName,
-            rolesJson = Json.encodeToString(member.roles),
-            isActive = if (member.isActive) 1 else 0,
-            createdAt = member.createdAt,
-            updatedAt = member.updatedAt
+            id = normalized.id,
+            departmentId = normalized.departmentId,
+            email = normalized.email,
+            firstName = normalized.firstName,
+            lastName = normalized.lastName,
+            memberNumber = normalized.memberNumber,
+            rolesJson = Json.encodeToString(normalized.roles),
+            isActive = if (normalized.isActive) 1 else 0,
+            createdAt = normalized.createdAt,
+            updatedAt = normalized.updatedAt
         )
     }
 

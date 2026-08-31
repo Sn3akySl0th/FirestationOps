@@ -28,6 +28,7 @@ import org.jetbrains.compose.resources.painterResource
 import firestationops.app.shared.generated.resources.Res
 import firestationops.app.shared.generated.resources.compose_multiplatform
 
+import com.example.firestationops.domain.bootstrap.DepartmentCatalogBootstrap
 import com.example.firestationops.domain.model.UserState
 import com.example.firestationops.domain.repository.mock.MockAuthRepository
 import com.example.firestationops.domain.repository.mock.MockApparatusRepository
@@ -41,8 +42,12 @@ import com.example.firestationops.ui.dashboard.DashboardViewModel
 import com.example.firestationops.ui.inspection.InspectionScreen
 import com.example.firestationops.ui.inspection.InspectionViewModel
 import com.example.firestationops.ui.deficiency.*
+import com.example.firestationops.ui.department.DepartmentSettingsScreen
+import com.example.firestationops.ui.department.DepartmentSettingsViewModel
 import com.example.firestationops.domain.sync.SyncCoordinator
 import com.example.firestationops.domain.sync.NoOpSyncCoordinator
+import com.example.firestationops.domain.bootstrap.NoOpDepartmentCatalogBootstrap
+import com.example.firestationops.domain.model.Role
 
 sealed class Screen {
     object Dashboard : Screen()
@@ -51,6 +56,7 @@ sealed class Screen {
     data class DeficiencyDetail(val deficiencyId: String) : Screen()
     object IncidentList : Screen()
     data class IncidentDetail(val incidentId: String?) : Screen()
+    object DepartmentSettings : Screen()
 }
 
 @Composable
@@ -62,6 +68,7 @@ fun App(
     attachmentRepository: AttachmentRepository,
     incidentRepository: IncidentRepository,
     departmentRepository: DepartmentRepository,
+    departmentCatalogBootstrap: DepartmentCatalogBootstrap = NoOpDepartmentCatalogBootstrap(),
     syncCoordinator: SyncCoordinator = NoOpSyncCoordinator(),
     onRequestBackgroundSync: () -> Unit = {},
     onPrepareDepartment: (String) -> Unit = {}
@@ -113,6 +120,8 @@ fun App(
                                         onOpenDeficienciesClick = { currentScreen = Screen.DeficiencyList },
                                         onDeficiencyClick = { id -> currentScreen = Screen.DeficiencyDetail(id) },
                                         onOpenIncidentsClick = { currentScreen = Screen.IncidentList },
+                                        showDepartmentSettings = state.member.hasRole(Role.OFFICER),
+                                        onOpenDepartmentSettings = { currentScreen = Screen.DepartmentSettings },
                                         onSyncNowClick = {
                                             onRequestBackgroundSync()
                                         }
@@ -194,6 +203,20 @@ fun App(
                                 onBack = { currentScreen = Screen.IncidentList }
                             )
                         }
+                        Screen.DepartmentSettings -> {
+                            val departmentSettingsViewModel = remember(state.member.id) {
+                                DepartmentSettingsViewModel(
+                                    member = state.member,
+                                    departmentRepository = departmentRepository,
+                                    departmentCatalogBootstrap = departmentCatalogBootstrap,
+                                    syncCoordinator = syncCoordinator
+                                )
+                            }
+                            DepartmentSettingsScreen(
+                                viewModel = departmentSettingsViewModel,
+                                onBack = { currentScreen = Screen.Dashboard }
+                            )
+                        }
                     }
                 }
                 UserState.Unauthenticated, is UserState.Loading, is UserState.Error -> {
@@ -233,11 +256,14 @@ fun MainContent(
             ) {
                 Column {
                     Text(
-                        text = member.fullName,
+                        text = buildString {
+                            append(member.fullName)
+                            member.memberNumber?.let { append(" (#$it)") }
+                        },
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        text = "Department ID: ${member.departmentId}",
+                        text = "Dept ${member.departmentId}",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }

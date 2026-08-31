@@ -27,6 +27,10 @@ class PersistentInspectionRepository(private val database: FirestationOpsDatabas
 
     fun ensureDepartmentData(departmentId: String) {
         DemoDepartmentSeeder.ensureDemoData(database, departmentId)
+        refreshCatalog()
+    }
+
+    fun refreshCatalog() {
         refresh()
     }
 

@@ -32,15 +32,36 @@ Each signed-in user must have a profile document:
 
 ```
 members/{firebaseUid}
-  departmentId: "your-department-id"
+  departmentId: "5"           # fire department number (tenant)
+  memberNumber: "221"         # firefighter badge number (200-225)
   email: "member@example.com"
-  firstName: "Alex"
-  lastName: "Rivera"
-  roles: ["OFFICER"]
+  firstName: "Chris"
+  lastName: "Lefebvre"
+  roles: ["ADMIN"]
   isActive: true
 ```
 
-On first Firebase sign-in, if a matching local seeded member exists by email, the app creates this document automatically using the Firebase UID.
+All department data lives under `departments/5/...` (stations, apparatus, inspections, etc.).
+
+If `departmentId` was previously set to a badge number like `221`, the app remaps it to department `5` and stores `221` in `memberNumber` on sign-in.
+
+Users without a `members/{uid}` document cannot sign in unless their email matches a locally seeded development member (first-time bootstrap only). The app does not assign `mock-dept-id` to unknown Firebase users.
+
+On first Firebase sign-in with a matching local seeded member, the app creates the `members/{uid}` document and mirrors it to `departments/{departmentId}/members/{uid}`.
+
+Administrators can bootstrap an empty cloud catalog from **Department settings** on the officer dashboard. This uploads the demo stations, apparatus, templates, and member roster for the department.
+
+## Department catalog paths
+
+```
+departments/{departmentId}
+departments/{departmentId}/stations/{stationId}
+departments/{departmentId}/apparatus/{apparatusId}
+departments/{departmentId}/templates/{templateId}
+departments/{departmentId}/members/{memberId}
+```
+
+Catalog records are downloaded on sync and stored locally in SQLDelight. Operational records continue to use the paths documented in Milestone 10.
 
 ## Deploy security rules
 
