@@ -42,6 +42,8 @@ import com.example.firestationops.ui.dashboard.DashboardViewModel
 import com.example.firestationops.ui.inspection.InspectionScreen
 import com.example.firestationops.ui.inspection.InspectionViewModel
 import com.example.firestationops.ui.deficiency.*
+import com.example.firestationops.ui.catalog.CatalogSettingsScreen
+import com.example.firestationops.ui.catalog.CatalogSettingsViewModel
 import com.example.firestationops.ui.department.DepartmentSettingsScreen
 import com.example.firestationops.ui.department.DepartmentSettingsViewModel
 import com.example.firestationops.domain.sync.SyncCoordinator
@@ -57,6 +59,7 @@ sealed class Screen {
     object IncidentList : Screen()
     data class IncidentDetail(val incidentId: String?) : Screen()
     object DepartmentSettings : Screen()
+    object CatalogSettings : Screen()
 }
 
 @Composable
@@ -69,6 +72,7 @@ fun App(
     incidentRepository: IncidentRepository,
     departmentRepository: DepartmentRepository,
     memberRosterRepository: MemberRosterRepository = NoOpMemberRosterRepository(),
+    catalogAdminRepository: CatalogAdminRepository = NoOpCatalogAdminRepository(),
     departmentCatalogBootstrap: DepartmentCatalogBootstrap = NoOpDepartmentCatalogBootstrap(),
     syncCoordinator: SyncCoordinator = NoOpSyncCoordinator(),
     onRequestBackgroundSync: () -> Unit = {},
@@ -216,7 +220,27 @@ fun App(
                             }
                             DepartmentSettingsScreen(
                                 viewModel = departmentSettingsViewModel,
-                                onBack = { currentScreen = Screen.Dashboard }
+                                onBack = { currentScreen = Screen.Dashboard },
+                                onOpenCatalogSettings = {
+                                    if (state.member.hasRole(Role.ADMIN)) {
+                                        currentScreen = Screen.CatalogSettings
+                                    }
+                                }
+                            )
+                        }
+                        Screen.CatalogSettings -> {
+                            val catalogSettingsViewModel = remember(state.member.id) {
+                                CatalogSettingsViewModel(
+                                    member = state.member,
+                                    apparatusRepository = apparatusRepository,
+                                    inspectionRepository = inspectionRepository,
+                                    catalogAdminRepository = catalogAdminRepository,
+                                    syncCoordinator = syncCoordinator
+                                )
+                            }
+                            CatalogSettingsScreen(
+                                viewModel = catalogSettingsViewModel,
+                                onBack = { currentScreen = Screen.DepartmentSettings }
                             )
                         }
                     }

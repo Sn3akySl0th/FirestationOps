@@ -44,7 +44,8 @@ import com.example.firestationops.domain.model.Role
 @Composable
 fun DepartmentSettingsScreen(
     viewModel: DepartmentSettingsViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenCatalogSettings: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val actionMessage by viewModel.actionMessage.collectAsState()
@@ -112,6 +113,29 @@ fun DepartmentSettingsScreen(
                                         },
                                         style = MaterialTheme.typography.bodySmall
                                     )
+                                }
+                            }
+                        }
+                    }
+
+                    if (state.canBootstrapCatalog) {
+                        item {
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text("Department catalog", style = MaterialTheme.typography.titleMedium)
+                                    Text(
+                                        "Edit stations, apparatus, and inspection templates used by field workflows.",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Button(
+                                        onClick = onOpenCatalogSettings,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Manage catalog")
+                                    }
                                 }
                             }
                         }

@@ -34,6 +34,7 @@ class MainActivity : ComponentActivity() {
                 incidentRepository = graph.incidentRepository,
                 departmentRepository = graph.departmentRepository,
                 memberRosterRepository = graph.memberRosterRepository,
+                catalogAdminRepository = graph.catalogAdminRepository,
                 departmentCatalogBootstrap = graph.departmentCatalogBootstrap,
                 syncCoordinator = graph.syncCoordinator,
                 onRequestBackgroundSync = {

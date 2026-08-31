@@ -10,8 +10,10 @@ import com.example.firestationops.domain.repository.persistent.PersistentDeficie
 import com.example.firestationops.domain.repository.persistent.PersistentInspectionRepository
 import com.example.firestationops.domain.repository.persistent.PersistentAttachmentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentIncidentRepository
+import com.example.firestationops.domain.repository.persistent.PersistentCatalogAdminRepository
 import com.example.firestationops.domain.repository.persistent.PersistentMemberRosterRepository
 import com.example.firestationops.domain.bootstrap.NoOpDepartmentCatalogBootstrap
+import com.example.firestationops.domain.repository.persistent.PersistentDepartmentRepository
 import com.example.firestationops.domain.sync.NoOpSyncCoordinator
 
 fun main() = application {
@@ -26,6 +28,10 @@ fun main() = application {
     val incidentRepository = PersistentIncidentRepository(database)
     val departmentRepository = PersistentDepartmentRepository(database)
     val memberRosterRepository = PersistentMemberRosterRepository(database)
+    val catalogAdminRepository = PersistentCatalogAdminRepository(database) {
+        (apparatusRepository as PersistentApparatusRepository).refreshCatalog()
+        (inspectionRepository as PersistentInspectionRepository).refreshCatalog()
+    }
 
     Window(
         onCloseRequest = ::exitApplication,
@@ -40,6 +46,7 @@ fun main() = application {
             incidentRepository = incidentRepository,
             departmentRepository = departmentRepository,
             memberRosterRepository = memberRosterRepository,
+            catalogAdminRepository = catalogAdminRepository,
             departmentCatalogBootstrap = NoOpDepartmentCatalogBootstrap(),
             syncCoordinator = NoOpSyncCoordinator(),
             onPrepareDepartment = { departmentId ->

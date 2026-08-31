@@ -47,6 +47,9 @@ class MockInspectionRepository : InspectionRepository {
     override fun getActiveTemplates(departmentId: String): Flow<List<InspectionTemplate>> = 
         templates.map { list -> list.filter { it.isActive } }
 
+    override fun getTemplatesByDepartment(departmentId: String): Flow<List<InspectionTemplate>> =
+        templates.map { list -> list.filter { it.departmentId == departmentId } }
+
     override fun getTemplatesByApparatusType(departmentId: String, apparatusType: String): Flow<List<InspectionTemplate>> = 
         templates.map { list -> list.filter { it.apparatusType == apparatusType && it.isActive } }
 
