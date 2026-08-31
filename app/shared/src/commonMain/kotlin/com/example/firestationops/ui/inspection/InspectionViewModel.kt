@@ -50,7 +50,7 @@ class InspectionViewModel(
     val attachmentsById: StateFlow<Map<String, Attachment>> = attachmentRepository
         .getAttachmentsByDepartment(member.departmentId)
         .map { attachments -> attachments.associateBy { it.id } }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyMap())
+        .stateIn(scope, SharingStarted.WhileSubscribed(stopTimeoutMillis = 0), emptyMap())
 
     init {
         loadData()
