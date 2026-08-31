@@ -1,5 +1,7 @@
 package com.example.firestationops.data.firebase
 
+import android.content.Context
+import com.example.firestationops.domain.model.Attachment
 import com.example.firestationops.domain.model.SyncStatus
 import com.example.firestationops.domain.repository.AttachmentRepository
 import com.example.firestationops.domain.repository.CatalogRepository
@@ -19,6 +21,7 @@ import kotlinx.coroutines.tasks.await
 import java.io.File
 
 class FirebaseSyncCoordinator(
+    private val context: Context,
     private val firebaseEnabled: Boolean,
     private val catalogRepository: CatalogRepository,
     private val attachmentRepository: AttachmentRepository,
@@ -63,6 +66,12 @@ class FirebaseSyncCoordinator(
         }
         runStep("Download deficiencies") {
             downloadedCount += pullDeficiencies(departmentId)
+        }
+        runStep("Download incidents") {
+            downloadedCount += pullIncidents(departmentId)
+        }
+        runStep("Download attachments") {
+            downloadedCount += pullAttachments(departmentId)
         }
 
         val pendingAttachments = attachmentRepository.getPendingSyncAttachments()
@@ -288,7 +297,131 @@ class FirebaseSyncCoordinator(
         return count
     }
 
-    private suspend fun uploadAttachment(attachment: com.example.firestationops.domain.model.Attachment) {
+    private suspend fun pullIncidents(departmentId: String): Int {
+        val pendingIncidentIds = incidentRepository.getPendingSyncIncidents()
+            .getOrElse { emptyList() }
+            .map { it.id }
+            .toSet()
+        val pendingCommandLogIds = incidentRepository.getPendingSyncCommandLogEntries()
+            .getOrElse { emptyList() }
+            .map { it.id }
+            .toSet()
+        val pendingUnitAssignmentIds = incidentRepository.getPendingSyncUnitAssignments()
+            .getOrElse { emptyList() }
+            .map { it.id }
+            .toSet()
+        val pendingPersonnelAssignmentIds = incidentRepository.getPendingSyncPersonnelAssignments()
+            .getOrElse { emptyList() }
+            .map { it.id }
+            .toSet()
+
+        val snapshot = firestore.collection("departments")
+            .document(departmentId)
+            .collection("incidents")
+            .get()
+            .await()
+
+        var count = 0
+        for (document in snapshot.documents) {
+            val incident = FirestoreMappers.incidentFromMap(
+                id = document.id,
+                data = document.data ?: continue
+            ) ?: continue
+
+            if (incident.id !in pendingIncidentIds) {
+                incidentRepository.saveIncident(incident)
+                count++
+            }
+
+            val incidentRef = firestore.collection("departments")
+                .document(departmentId)
+                .collection("incidents")
+                .document(incident.id)
+
+            val commandLogSnapshot = incidentRef.collection("commandLog").get().await()
+            for (entryDocument in commandLogSnapshot.documents) {
+                val entry = FirestoreMappers.commandLogEntryFromMap(
+                    id = entryDocument.id,
+                    data = entryDocument.data ?: continue
+                ) ?: continue
+                if (entry.id in pendingCommandLogIds) continue
+                incidentRepository.appendCommandLogEntry(entry)
+                count++
+            }
+
+            val unitAssignmentSnapshot = incidentRef.collection("unitAssignments").get().await()
+            for (assignmentDocument in unitAssignmentSnapshot.documents) {
+                val assignment = FirestoreMappers.unitAssignmentFromMap(
+                    id = assignmentDocument.id,
+                    data = assignmentDocument.data ?: continue
+                ) ?: continue
+                if (assignment.id in pendingUnitAssignmentIds) continue
+                incidentRepository.saveUnitAssignment(assignment)
+                count++
+            }
+
+            val personnelAssignmentSnapshot = incidentRef.collection("personnelAssignments").get().await()
+            for (assignmentDocument in personnelAssignmentSnapshot.documents) {
+                val assignment = FirestoreMappers.personnelAssignmentFromMap(
+                    id = assignmentDocument.id,
+                    data = assignmentDocument.data ?: continue
+                ) ?: continue
+                if (assignment.id in pendingPersonnelAssignmentIds) continue
+                incidentRepository.savePersonnelAssignment(assignment)
+                count++
+            }
+        }
+        return count
+    }
+
+    private suspend fun pullAttachments(departmentId: String): Int {
+        val pendingLocalIds = attachmentRepository.getPendingSyncAttachments()
+            .getOrElse { emptyList() }
+            .map { it.id }
+            .toSet()
+
+        val snapshot = firestore.collection("departments")
+            .document(departmentId)
+            .collection("attachments")
+            .get()
+            .await()
+
+        val cacheDir = File(context.cacheDir, "sync_attachments").apply { mkdirs() }
+        var count = 0
+
+        for (document in snapshot.documents) {
+            val remoteAttachment = FirestoreMappers.attachmentFromMap(
+                id = document.id,
+                data = document.data ?: continue
+            ) ?: continue
+
+            if (remoteAttachment.id in pendingLocalIds) continue
+
+            val existing = attachmentRepository.getAttachment(remoteAttachment.id).getOrNull()
+            val existingLocalPath = existing?.localUri
+            if (!existingLocalPath.isNullOrBlank() && File(existingLocalPath).exists()) {
+                attachmentRepository.saveAttachment(
+                    remoteAttachment.copy(localUri = existingLocalPath, syncStatus = SyncStatus.SYNCED)
+                )
+                continue
+            }
+
+            val localFile = File(cacheDir, "${remoteAttachment.id}.jpg")
+            val storagePath = FirestorePaths.attachmentStorage(departmentId, remoteAttachment.id)
+            storage.reference.child(storagePath).getFile(localFile).await()
+
+            attachmentRepository.saveAttachment(
+                remoteAttachment.copy(
+                    localUri = localFile.absolutePath,
+                    syncStatus = SyncStatus.SYNCED
+                )
+            )
+            count++
+        }
+        return count
+    }
+
+    private suspend fun uploadAttachment(attachment: Attachment) {
         val localPath = attachment.localUri
             ?: error("Attachment ${attachment.id} has no local file path.")
 

@@ -4,11 +4,15 @@ import com.example.firestationops.domain.model.Apparatus
 import com.example.firestationops.domain.model.ApparatusStatus
 import com.example.firestationops.domain.model.Attachment
 import com.example.firestationops.domain.model.CommandLogEntry
+import com.example.firestationops.domain.model.CommandLogEntryType
+import com.example.firestationops.domain.model.AssignmentStatus
 import com.example.firestationops.domain.model.Deficiency
 import com.example.firestationops.domain.model.DeficiencySeverity
 import com.example.firestationops.domain.model.DeficiencyStatus
 import com.example.firestationops.domain.model.Department
 import com.example.firestationops.domain.model.Incident
+import com.example.firestationops.domain.model.IncidentStatus
+import com.example.firestationops.domain.model.IncidentType
 import com.example.firestationops.domain.model.IncidentUnitAssignment
 import com.example.firestationops.domain.model.Inspection
 import com.example.firestationops.domain.model.InspectionResponse
@@ -386,4 +390,113 @@ internal object FirestoreMappers {
         "updatedByUserId" to assignment.updatedByUserId,
         "syncStatus" to SyncStatus.SYNCED.name
     )
+
+    fun attachmentFromMap(id: String, data: Map<String, Any?>): Attachment? {
+        val departmentId = data["departmentId"] as? String ?: return null
+        val createdAt = (data["createdAt"] as? Number)?.toLong() ?: return null
+        val createdByUserId = data["createdByUserId"] as? String ?: return null
+        return Attachment(
+            id = id,
+            departmentId = departmentId,
+            localUri = data["localUri"] as? String,
+            remoteUrl = data["remoteUrl"] as? String,
+            syncStatus = SyncStatus.SYNCED,
+            createdAt = createdAt,
+            createdByUserId = createdByUserId
+        )
+    }
+
+    fun incidentFromMap(id: String, data: Map<String, Any?>): Incident? {
+        val departmentId = data["departmentId"] as? String ?: return null
+        val title = data["title"] as? String ?: return null
+        val createdAt = (data["createdAt"] as? Number)?.toLong() ?: return null
+        val createdByUserId = data["createdByUserId"] as? String ?: return null
+        val updatedAt = (data["updatedAt"] as? Number)?.toLong() ?: return null
+        val updatedByUserId = data["updatedByUserId"] as? String ?: return null
+        val incidentTypeName = data["incidentType"] as? String ?: IncidentType.OTHER.name
+        val statusName = data["status"] as? String ?: IncidentStatus.DRAFT.name
+        return Incident(
+            id = id,
+            departmentId = departmentId,
+            title = title,
+            summary = data["summary"] as? String ?: "",
+            locationDescription = data["locationDescription"] as? String ?: "",
+            incidentType = runCatching { IncidentType.valueOf(incidentTypeName) }.getOrDefault(IncidentType.OTHER),
+            status = runCatching { IncidentStatus.valueOf(statusName) }.getOrDefault(IncidentStatus.DRAFT),
+            createdAt = createdAt,
+            createdByUserId = createdByUserId,
+            updatedAt = updatedAt,
+            updatedByUserId = updatedByUserId,
+            closedAt = (data["closedAt"] as? Number)?.toLong(),
+            closedByUserId = data["closedByUserId"] as? String,
+            syncStatus = SyncStatus.SYNCED
+        )
+    }
+
+    fun commandLogEntryFromMap(id: String, data: Map<String, Any?>): CommandLogEntry? {
+        val incidentId = data["incidentId"] as? String ?: return null
+        val departmentId = data["departmentId"] as? String ?: return null
+        val message = data["message"] as? String ?: return null
+        val createdAt = (data["createdAt"] as? Number)?.toLong() ?: return null
+        val createdByUserId = data["createdByUserId"] as? String ?: return null
+        val entryTypeName = data["entryType"] as? String ?: CommandLogEntryType.LOG.name
+        return CommandLogEntry(
+            id = id,
+            incidentId = incidentId,
+            departmentId = departmentId,
+            message = message,
+            entryType = runCatching { CommandLogEntryType.valueOf(entryTypeName) }.getOrDefault(CommandLogEntryType.LOG),
+            createdAt = createdAt,
+            createdByUserId = createdByUserId,
+            incidentTimestamp = (data["incidentTimestamp"] as? Number)?.toLong(),
+            correctsEntryId = data["correctsEntryId"] as? String,
+            syncStatus = SyncStatus.SYNCED
+        )
+    }
+
+    fun unitAssignmentFromMap(id: String, data: Map<String, Any?>): IncidentUnitAssignment? {
+        val incidentId = data["incidentId"] as? String ?: return null
+        val departmentId = data["departmentId"] as? String ?: return null
+        val apparatusId = data["apparatusId"] as? String ?: return null
+        val assignedAt = (data["assignedAt"] as? Number)?.toLong() ?: return null
+        val assignedByUserId = data["assignedByUserId"] as? String ?: return null
+        val updatedAt = (data["updatedAt"] as? Number)?.toLong() ?: return null
+        val updatedByUserId = data["updatedByUserId"] as? String ?: return null
+        val statusName = data["status"] as? String ?: AssignmentStatus.ASSIGNED.name
+        return IncidentUnitAssignment(
+            id = id,
+            incidentId = incidentId,
+            departmentId = departmentId,
+            apparatusId = LegacyFirestoreIdNormalizer.normalizeEntityId(departmentId, apparatusId),
+            status = runCatching { AssignmentStatus.valueOf(statusName) }.getOrDefault(AssignmentStatus.ASSIGNED),
+            assignedAt = assignedAt,
+            assignedByUserId = assignedByUserId,
+            updatedAt = updatedAt,
+            updatedByUserId = updatedByUserId,
+            syncStatus = SyncStatus.SYNCED
+        )
+    }
+
+    fun personnelAssignmentFromMap(id: String, data: Map<String, Any?>): PersonnelAssignment? {
+        val incidentId = data["incidentId"] as? String ?: return null
+        val departmentId = data["departmentId"] as? String ?: return null
+        val memberId = data["memberId"] as? String ?: return null
+        val assignedAt = (data["assignedAt"] as? Number)?.toLong() ?: return null
+        val assignedByUserId = data["assignedByUserId"] as? String ?: return null
+        val updatedAt = (data["updatedAt"] as? Number)?.toLong() ?: return null
+        val updatedByUserId = data["updatedByUserId"] as? String ?: return null
+        val statusName = data["status"] as? String ?: AssignmentStatus.ASSIGNED.name
+        return PersonnelAssignment(
+            id = id,
+            incidentId = incidentId,
+            departmentId = departmentId,
+            memberId = memberId,
+            status = runCatching { AssignmentStatus.valueOf(statusName) }.getOrDefault(AssignmentStatus.ASSIGNED),
+            assignedAt = assignedAt,
+            assignedByUserId = assignedByUserId,
+            updatedAt = updatedAt,
+            updatedByUserId = updatedByUserId,
+            syncStatus = SyncStatus.SYNCED
+        )
+    }
 }

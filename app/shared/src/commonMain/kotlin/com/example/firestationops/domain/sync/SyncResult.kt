@@ -7,6 +7,7 @@ data class SyncResult(
     val errors: List<String> = emptyList()
 ) {
     val isSuccess: Boolean get() = failedCount == 0 && errors.isEmpty()
+    val hasPartialSuccess: Boolean get() = failedCount > 0 && (uploadedCount > 0 || downloadedCount > 0)
 }
 
 enum class SyncRunnerState {
