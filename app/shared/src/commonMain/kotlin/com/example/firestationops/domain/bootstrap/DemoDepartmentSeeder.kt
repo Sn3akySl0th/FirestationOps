@@ -8,6 +8,7 @@ import com.example.firestationops.domain.model.Department
 import com.example.firestationops.domain.model.InspectionTemplate
 import com.example.firestationops.domain.model.InspectionTemplateItem
 import com.example.firestationops.domain.model.Station
+import com.example.firestationops.domain.sync.SyncRecordDiffer
 
 object DemoDepartmentSeeder {
     const val TEMPLATE_ENGINE = "tmpl-engine"
@@ -65,28 +66,86 @@ object DemoDepartmentSeeder {
         departmentId: String,
         profile: DepartmentCatalogProfile
     ) {
+        val existingDepartment = database.getDepartmentById(departmentId)
         val now = currentTimeMillis()
-        database.insertDepartment(
-            Department(
-                id = departmentId,
-                name = profile.departmentName,
-                stationIds = profile.stationIds,
-                createdAt = now,
-                updatedAt = now
-            )
+        val department = Department(
+            id = departmentId,
+            name = profile.departmentName,
+            stationIds = profile.stationIds,
+            createdAt = existingDepartment?.createdAt ?: now,
+            updatedAt = existingDepartment?.updatedAt ?: now
         )
+        if (existingDepartment == null ||
+            existingDepartment.name != department.name ||
+            existingDepartment.stationIds != department.stationIds
+        ) {
+            database.insertDepartment(
+                department.copy(updatedAt = if (existingDepartment == null) department.updatedAt else now)
+            )
+        }
 
         profile.templates.forEach { templateDefinition ->
-            database.insertTemplate(profile.toTemplate(departmentId, templateDefinition))
+            upsertTemplate(database, departmentId, profile, templateDefinition, now)
         }
         profile.stations.forEach { stationDefinition ->
-            database.insertStation(profile.toStation(departmentId, stationDefinition))
+            upsertStation(database, departmentId, profile, stationDefinition, now)
         }
         profile.apparatus.forEach { apparatusDefinition ->
-            database.insertApparatus(profile.toApparatus(departmentId, apparatusDefinition))
+            upsertApparatus(database, departmentId, profile, apparatusDefinition, now)
         }
 
         retireReplacedCatalogEntities(database, profile)
+    }
+
+    private fun upsertTemplate(
+        database: FirestationOpsDatabase,
+        departmentId: String,
+        profile: DepartmentCatalogProfile,
+        templateDefinition: InspectionTemplateDefinition,
+        now: Long
+    ) {
+        val existing = database.getAllTemplates().find { it.id == templateDefinition.id }
+        val desired = profile.toTemplate(departmentId, templateDefinition)
+        when {
+            existing == null -> database.insertTemplate(desired.copy(createdAt = now, updatedAt = now))
+            !SyncRecordDiffer.templatesMatch(desired, existing) -> database.insertTemplate(
+                desired.copy(createdAt = existing.createdAt, updatedAt = now)
+            )
+        }
+    }
+
+    private fun upsertStation(
+        database: FirestationOpsDatabase,
+        departmentId: String,
+        profile: DepartmentCatalogProfile,
+        stationDefinition: StationDefinition,
+        now: Long
+    ) {
+        val existing = database.getAllStations().find { it.id == stationDefinition.id }
+        val desired = profile.toStation(departmentId, stationDefinition)
+        when {
+            existing == null -> database.insertStation(desired.copy(createdAt = now, updatedAt = now))
+            !SyncRecordDiffer.stationsMatch(desired, existing) -> database.insertStation(
+                desired.copy(createdAt = existing.createdAt, updatedAt = now)
+            )
+        }
+    }
+
+    private fun upsertApparatus(
+        database: FirestationOpsDatabase,
+        departmentId: String,
+        profile: DepartmentCatalogProfile,
+        apparatusDefinition: ApparatusDefinition,
+        now: Long
+    ) {
+        val existing = database.getAllApparatus().find { it.id == apparatusDefinition.id }
+        val desired = profile.toApparatus(departmentId, apparatusDefinition)
+        when {
+            existing == null -> database.insertApparatus(desired.copy(createdAt = now, updatedAt = now))
+            !SyncRecordDiffer.apparatusMatch(desired, existing) -> database.insertApparatus(
+                desired.copy(createdAt = existing.createdAt, updatedAt = now)
+            )
+        }
     }
 
     private fun retireReplacedCatalogEntities(

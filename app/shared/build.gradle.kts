@@ -89,6 +89,16 @@ kotlin {
         }
         jvmMain.dependencies {
             implementation(libs.sqldelight.sqlite.driver)
+            implementation(libs.gitlive.firebase.app)
+            implementation(libs.gitlive.firebase.auth)
+            implementation(libs.gitlive.firebase.firestore)
+            implementation(libs.gitlive.firebase.storage)
+            implementation(libs.gitlive.firebase.java.sdk)
+            implementation(libs.kotlinx.coroutinesPlayServices)
+            implementation(platform(libs.firebase.bom))
+            implementation(libs.firebase.auth)
+            implementation(libs.firebase.firestore)
+            implementation(libs.firebase.storage)
         }
     }
 }

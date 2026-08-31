@@ -9,4 +9,4 @@ class JSPlatform : Platform {
 actual fun getPlatform(): Platform = JSPlatform()
 
 actual fun currentTimeMillis(): Long = kotlin.js.Date.now().toLong()
-actual fun randomUUID(): String = crypto.randomUUID()
+actual fun randomUUID(): String = js("globalThis.crypto.randomUUID()") as String

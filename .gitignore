@@ -7,6 +7,8 @@ captures
 
 # Firebase/Secrets
 google-services.json
+firebase-desktop.json
+**/.firestationops/firebase.json
 GoogleService-Info.plist
 firebase-debug.log
 *.keystore
@@ -23,6 +25,9 @@ secrets.properties
 .kotlin
 .gradle
 **/build/
+firestationops.db
+.kotlin-js-store/
+kotlin-js-store/
 xcuserdata
 !src/**/build/
 *.xcodeproj/*

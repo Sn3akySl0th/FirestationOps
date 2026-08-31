@@ -49,10 +49,13 @@ Record IDs are reused as Firestore document IDs for idempotent retries.
 - **Manual:** Dashboard **Sync now** button
 - **Foreground:** Initial sync after authentication when Firebase is configured
 - **Background:** WorkManager periodic job every 15 minutes when network is available (Android only)
+- **Desktop manual:** Dashboard **Sync now** runs sync in a background coroutine when desktop Firebase is configured
 
-Desktop and web targets currently use `NoOpSyncCoordinator` and remain local-only.
+Desktop and web targets use `NoOpSyncCoordinator` unless Firebase is configured. The Windows desktop app supports Firebase when `firebase-desktop.json` (or `~/.firestationops/firebase.json`) is present.
 
 ## Platform notes
 
-- Firebase SDK calls live in `app/shared/src/androidMain` behind `SyncCoordinator` and `AuthRepository` interfaces.
+- Firebase SDK calls live in `app/shared/src/androidMain` (Android) and `app/shared/src/jvmMain` (desktop) behind `SyncCoordinator` and `AuthRepository` interfaces.
+- Shared sync logic lives in `DepartmentSyncEngine` with platform-specific `CloudSyncClient` implementations.
 - Without `google-services.json`, Android falls back to local simulated authentication.
+- Without desktop Firebase config, Windows falls back to local simulated authentication.

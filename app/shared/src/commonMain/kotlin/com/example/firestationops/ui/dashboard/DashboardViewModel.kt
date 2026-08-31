@@ -12,14 +12,15 @@ import com.example.firestationops.domain.model.DeficiencySeverity
 import com.example.firestationops.domain.model.DeficiencySummary
 import com.example.firestationops.domain.model.InspectionComplianceStatus
 import com.example.firestationops.domain.model.Station
-import com.example.firestationops.domain.model.SyncStatus
 import com.example.firestationops.domain.repository.ApparatusRepository
 import com.example.firestationops.domain.repository.AttachmentRepository
 import com.example.firestationops.domain.repository.DeficiencyRepository
 import com.example.firestationops.domain.repository.IncidentRepository
 import com.example.firestationops.domain.repository.InspectionRepository
+import com.example.firestationops.domain.sync.PendingSyncQueueBuilder
 import com.example.firestationops.domain.sync.SyncCoordinator
 import com.example.firestationops.domain.sync.SyncMessageFormatter
+import com.example.firestationops.domain.sync.SyncQueueState
 import com.example.firestationops.domain.sync.SyncRunnerState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -44,6 +45,8 @@ class DashboardViewModel(
 
     private val _syncMessage = MutableStateFlow<String?>(null)
     val syncMessage: StateFlow<String?> = _syncMessage.asStateFlow()
+    private val _lastSyncResult = MutableStateFlow<com.example.firestationops.domain.sync.SyncResult?>(null)
+    val lastSyncResult: StateFlow<com.example.firestationops.domain.sync.SyncResult?> = _lastSyncResult.asStateFlow()
     val syncState: StateFlow<SyncRunnerState> = syncCoordinator.syncState
     val cloudSyncEnabled: Boolean = syncCoordinator.isAvailable()
 
@@ -51,9 +54,10 @@ class DashboardViewModel(
         combine(
             apparatusRepository.getStations(departmentId),
             apparatusRepository.getApparatusByDepartment(departmentId),
-            deficiencyRepository.getOpenDeficiencies(departmentId)
-        ) { stations, apparatusList, openDeficiencies ->
-            Triple(stations, apparatusList, openDeficiencies)
+            deficiencyRepository.getOpenDeficiencies(departmentId),
+            deficiencyRepository.getDeficienciesByDepartment(departmentId)
+        ) { stations, apparatusList, openDeficiencies, allDeficiencies ->
+            DashboardStationData(stations, apparatusList, openDeficiencies, allDeficiencies)
         },
         combine(
             inspectionRepository.getInspectionsByDepartment(departmentId),
@@ -64,12 +68,13 @@ class DashboardViewModel(
         },
         incidentRepository.getIncidentsByDepartment(departmentId)
     ) { stationData, inspectionData, incidents ->
-        val (stations, apparatusList, openDeficiencies) = stationData
+        val (stations, apparatusList, openDeficiencies, allDeficiencies) = stationData
         val (inspections, templates, attachments) = inspectionData
         buildDashboardState(
             stations = stations,
             apparatusList = apparatusList,
             openDeficiencies = openDeficiencies,
+            allDeficiencies = allDeficiencies,
             inspections = inspections,
             templates = templates,
             attachments = attachments,
@@ -88,6 +93,7 @@ class DashboardViewModel(
         viewModelScope.launch {
             _syncMessage.value = null
             val result = syncCoordinator.syncDepartment(departmentId)
+            _lastSyncResult.value = result
             _syncMessage.value = SyncMessageFormatter.format(result)
         }
     }
@@ -100,6 +106,7 @@ class DashboardViewModel(
         stations: List<Station>,
         apparatusList: List<Apparatus>,
         openDeficiencies: List<Deficiency>,
+        allDeficiencies: List<Deficiency>,
         inspections: List<com.example.firestationops.domain.model.Inspection>,
         templates: List<com.example.firestationops.domain.model.InspectionTemplate>,
         attachments: List<com.example.firestationops.domain.model.Attachment>,
@@ -138,10 +145,17 @@ class DashboardViewModel(
                 DeficiencyWithApparatus(deficiency, apparatusMap[deficiency.apparatusId])
             }
 
-        val pendingSyncCount = inspections.count { it.syncStatus != SyncStatus.SYNCED } +
-            openDeficiencies.count { it.syncStatus != SyncStatus.SYNCED } +
-            attachments.count { it.syncStatus != SyncStatus.SYNCED } +
-            incidents.count { it.syncStatus != SyncStatus.SYNCED }
+        val syncQueue = PendingSyncQueueBuilder.build(
+            PendingSyncQueueBuilder.Input(
+                inspections = inspections,
+                deficiencies = allDeficiencies,
+                attachments = attachments,
+                incidents = incidents,
+                apparatusById = apparatusMap,
+                templatesById = templates.associateBy { it.id }
+            )
+        )
+        val pendingSyncCount = syncQueue.pendingItems.size
 
         val stationSections = stations.map { station ->
             StationDashboardSection(
@@ -169,7 +183,8 @@ class DashboardViewModel(
             stations = stationSections,
             overdueInspections = overdueInspections,
             topDeficiencies = topDeficiencies,
-            pendingSyncCount = pendingSyncCount
+            pendingSyncCount = pendingSyncCount,
+            syncQueue = syncQueue
         )
     }
 
@@ -202,7 +217,8 @@ sealed interface DashboardUiState {
         val stations: List<StationDashboardSection>,
         val overdueInspections: List<OverdueInspectionItem>,
         val topDeficiencies: List<DeficiencyWithApparatus>,
-        val pendingSyncCount: Int
+        val pendingSyncCount: Int,
+        val syncQueue: SyncQueueState
     ) : DashboardUiState
 
     data class Error(val message: String) : DashboardUiState
@@ -229,4 +245,11 @@ data class ApparatusDashboardItem(
 data class OverdueInspectionItem(
     val apparatus: Apparatus,
     val compliance: ApparatusInspectionStatus
+)
+
+private data class DashboardStationData(
+    val stations: List<Station>,
+    val apparatusList: List<Apparatus>,
+    val openDeficiencies: List<Deficiency>,
+    val allDeficiencies: List<Deficiency>
 )

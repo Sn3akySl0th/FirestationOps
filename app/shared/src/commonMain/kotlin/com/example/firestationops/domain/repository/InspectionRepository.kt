@@ -10,6 +10,7 @@ interface InspectionRepository {
     fun getTemplatesByDepartment(departmentId: String): Flow<List<InspectionTemplate>>
     fun getTemplatesByApparatusType(departmentId: String, apparatusType: String): Flow<List<InspectionTemplate>>
     suspend fun getTemplate(id: String): Result<InspectionTemplate>
+    suspend fun getInspection(id: String): Result<Inspection?>
     
     suspend fun saveInspection(inspection: Inspection): Result<Unit>
     fun getInspectionsForApparatus(apparatusId: String): Flow<List<Inspection>>

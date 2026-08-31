@@ -6,6 +6,8 @@ object SyncMessageFormatter {
             "Downloaded ${result.downloadedCount} and uploaded ${result.uploadedCount} record(s)."
         result.isSuccess && result.uploadedCount > 0 ->
             "Synced ${result.uploadedCount} record(s) to the cloud."
+        result.isSuccess && result.downloadedCount > 0 && result.uploadedCount == 0 ->
+            downloadedSummary(result).replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } + "."
         result.isSuccess && result.downloadedCount > 0 ->
             "Downloaded ${result.downloadedCount} record(s) from the cloud."
         result.isSuccess ->
@@ -24,5 +26,20 @@ object SyncMessageFormatter {
             }
         else ->
             result.errors.firstOrNull() ?: "Sync failed."
+    }
+
+    fun downloadedSummary(result: SyncResult): String = when {
+        result.downloadedItems.isEmpty() -> "No new cloud records downloaded."
+        else -> buildList {
+            val newCount = result.downloadedItems.count { it.action == SyncActivityAction.NEW }
+            val updatedCount = result.downloadedItems.count { it.action == SyncActivityAction.UPDATED }
+            if (newCount > 0) add("$newCount new")
+            if (updatedCount > 0) add("$updatedCount updated")
+        }.joinToString(", ") + " from cloud"
+    }
+
+    fun uploadedSummary(result: SyncResult): String = when {
+        result.uploadedItems.isEmpty() -> "No local records uploaded."
+        else -> "${result.uploadedItems.size} uploaded to cloud"
     }
 }
