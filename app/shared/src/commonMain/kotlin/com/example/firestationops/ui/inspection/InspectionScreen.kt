@@ -7,10 +7,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.firestationops.domain.model.Attachment
 import com.example.firestationops.domain.model.DeficiencySeverity
 import com.example.firestationops.domain.model.InspectionStatus
 import com.example.firestationops.domain.model.InspectionTemplateItem
+import com.example.firestationops.domain.model.SyncStatus
+import com.example.firestationops.domain.sync.AttachmentUploadProgressTracker
+import com.example.firestationops.domain.sync.PendingSyncQueueBuilder
 import com.example.firestationops.platform.ExportResult
 import com.example.firestationops.platform.rememberFileExporter
 import com.example.firestationops.platform.rememberMediaPicker
@@ -23,6 +28,8 @@ fun InspectionScreen(
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val attachmentsById by viewModel.attachmentsById.collectAsState()
+    val uploadProgress by AttachmentUploadProgressTracker.activeUploads.collectAsState()
     var currentPickingItemId by remember { mutableStateOf<String?>(null) }
     var exportMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -129,13 +136,16 @@ fun InspectionScreen(
                                 InspectionItemCard(
                                     item = item,
                                     response = uiState.responses[item.id],
+                                    attachmentsById = attachmentsById,
+                                    uploadProgress = uploadProgress,
                                     onResponseChange = { status, severity, note ->
                                         viewModel.updateResponse(item.id, status, severity, note)
                                     },
                                     onAddAttachment = {
                                         currentPickingItemId = item.id
                                         mediaPicker.launch()
-                                    }
+                                    },
+                                    onRetryAttachment = viewModel::retryAttachment
                                 )
                             }
                         }
@@ -169,8 +179,11 @@ fun InspectionScreen(
 fun InspectionItemCard(
     item: InspectionTemplateItem,
     response: com.example.firestationops.domain.model.InspectionResponse?,
+    attachmentsById: Map<String, Attachment> = emptyMap(),
+    uploadProgress: Map<String, com.example.firestationops.domain.sync.AttachmentUploadProgress> = emptyMap(),
     onResponseChange: (InspectionStatus, DeficiencySeverity?, String?) -> Unit,
-    onAddAttachment: () -> Unit
+    onAddAttachment: () -> Unit,
+    onRetryAttachment: (String) -> Unit = {}
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -260,11 +273,71 @@ fun InspectionItemCard(
                 ) {
                     Text("Add Photo")
                 }
-                
+
                 if (response.attachmentIds.isNotEmpty()) {
-                    Text("${response.attachmentIds.size} Photos Attached", style = MaterialTheme.typography.labelSmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    response.attachmentIds.forEach { attachmentId ->
+                        val attachment = attachmentsById[attachmentId]
+                        AttachmentSyncRow(
+                            attachment = attachment,
+                            uploadProgress = uploadProgress[attachmentId]?.progressPercent,
+                            onRetry = { onRetryAttachment(attachmentId) }
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentSyncRow(
+    attachment: Attachment?,
+    uploadProgress: Int?,
+    onRetry: () -> Unit
+) {
+    val fileName = attachment?.localUri?.substringAfterLast('/') ?: "Photo"
+    val status = attachment?.syncStatus
+    val statusLabel = when {
+        uploadProgress != null -> "Uploading $uploadProgress%"
+        status != null -> PendingSyncQueueBuilder.statusLabel(status)
+        else -> "Saving..."
+    }
+    val statusColor = when {
+        uploadProgress != null -> MaterialTheme.colorScheme.primary
+        status == SyncStatus.SYNC_FAILED -> MaterialTheme.colorScheme.error
+        status == SyncStatus.SYNCED -> Color(0xFF2E7D32)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(fileName, style = MaterialTheme.typography.bodySmall)
+                Text(statusLabel, style = MaterialTheme.typography.labelSmall, color = statusColor)
+            }
+            if (status == SyncStatus.SYNC_FAILED) {
+                TextButton(onClick = onRetry) {
+                    Text("Retry")
+                }
+            }
+        }
+        if (uploadProgress != null) {
+            LinearProgressIndicator(
+                progress = { uploadProgress / 100f },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        attachment?.lastError?.let { error ->
+            Text(
+                error,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error
+            )
         }
     }
 }

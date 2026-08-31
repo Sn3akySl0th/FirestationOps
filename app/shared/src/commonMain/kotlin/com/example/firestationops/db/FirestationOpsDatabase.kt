@@ -385,55 +385,30 @@ class FirestationOpsDatabase(driver: SqlDriver) {
     }
 
     // Attachments
-    fun getAttachmentById(id: String): Attachment? = dbQueries.selectAttachmentById(id).executeAsOneOrNull()?.let {
+    private fun com.example.firestationops.db.AttachmentEntity.toDomain(): Attachment =
         Attachment(
-            id = it.id,
-            departmentId = it.departmentId,
-            localUri = it.localUri,
-            remoteUrl = it.remoteUrl,
-            syncStatus = SyncStatus.valueOf(it.syncStatus),
-            createdAt = it.createdAt,
-            createdByUserId = it.createdByUserId
+            id = id,
+            departmentId = departmentId,
+            localUri = localUri,
+            remoteUrl = remoteUrl,
+            syncStatus = SyncStatus.valueOf(syncStatus),
+            createdAt = createdAt,
+            createdByUserId = createdByUserId,
+            lastError = lastError,
+            failedAt = failedAt
         )
-    }
 
-    fun getAllAttachments(): List<Attachment> = dbQueries.selectAllAttachments().executeAsList().map {
-        Attachment(
-            id = it.id,
-            departmentId = it.departmentId,
-            localUri = it.localUri,
-            remoteUrl = it.remoteUrl,
-            syncStatus = SyncStatus.valueOf(it.syncStatus),
-            createdAt = it.createdAt,
-            createdByUserId = it.createdByUserId
-        )
-    }
+    fun getAttachmentById(id: String): Attachment? =
+        dbQueries.selectAttachmentById(id).executeAsOneOrNull()?.toDomain()
 
-    fun getAttachmentsByDepartment(departmentId: String): List<Attachment> = 
-        dbQueries.selectAttachmentsByDepartment(departmentId).executeAsList().map {
-            Attachment(
-                id = it.id,
-                departmentId = it.departmentId,
-                localUri = it.localUri,
-                remoteUrl = it.remoteUrl,
-                syncStatus = SyncStatus.valueOf(it.syncStatus),
-                createdAt = it.createdAt,
-                createdByUserId = it.createdByUserId
-            )
-        }
+    fun getAllAttachments(): List<Attachment> =
+        dbQueries.selectAllAttachments().executeAsList().map { it.toDomain() }
+
+    fun getAttachmentsByDepartment(departmentId: String): List<Attachment> =
+        dbQueries.selectAttachmentsByDepartment(departmentId).executeAsList().map { it.toDomain() }
 
     fun getPendingSyncAttachments(): List<Attachment> =
-        dbQueries.selectPendingSyncAttachments().executeAsList().map {
-            Attachment(
-                id = it.id,
-                departmentId = it.departmentId,
-                localUri = it.localUri,
-                remoteUrl = it.remoteUrl,
-                syncStatus = SyncStatus.valueOf(it.syncStatus),
-                createdAt = it.createdAt,
-                createdByUserId = it.createdByUserId
-            )
-        }
+        dbQueries.selectPendingSyncAttachments().executeAsList().map { it.toDomain() }
 
     fun insertAttachment(attachment: Attachment) {
         dbQueries.insertAttachment(
@@ -443,12 +418,22 @@ class FirestationOpsDatabase(driver: SqlDriver) {
             remoteUrl = attachment.remoteUrl,
             syncStatus = attachment.syncStatus.name,
             createdAt = attachment.createdAt,
-            createdByUserId = attachment.createdByUserId
+            createdByUserId = attachment.createdByUserId,
+            lastError = attachment.lastError,
+            failedAt = attachment.failedAt
         )
     }
 
     fun updateAttachmentSyncStatus(id: String, syncStatus: SyncStatus) {
         dbQueries.updateAttachmentSyncStatus(syncStatus = syncStatus.name, id = id)
+    }
+
+    fun markAttachmentUploadFailed(id: String, error: String, failedAt: Long) {
+        dbQueries.updateAttachmentUploadFailure(lastError = error, failedAt = failedAt, id = id)
+    }
+
+    fun retryAttachmentUpload(id: String) {
+        dbQueries.clearAttachmentUploadFailure(syncStatus = SyncStatus.PENDING_SYNC.name, id = id)
     }
 
     fun updateAttachmentRemoteUrl(id: String, remoteUrl: String) {

@@ -61,6 +61,14 @@ Records with local `PENDING_SYNC` status are not overwritten by cloud downloads.
 
 Record IDs are reused as Firestore document IDs for idempotent retries.
 
+## Attachment uploads
+
+Photos captured during inspections are copied into durable app storage (`sync_attachments/`) before being queued. Upload failures set `SYNC_FAILED` with `lastError` and `failedAt` so they are visible separately from never-attempted uploads.
+
+- **Inspection screen:** each attached photo shows sync status, upload progress, and a per-photo **Retry** action when failed.
+- **Dashboard:** failed uploads appear in a dedicated banner and in the sync queue with parent inspection context and **Retry** / **Retry all** actions.
+- **After capture:** when cloud sync is available, the app attempts an immediate upload in the background.
+
 ## Triggers
 
 - **Manual:** Dashboard **Sync now** button

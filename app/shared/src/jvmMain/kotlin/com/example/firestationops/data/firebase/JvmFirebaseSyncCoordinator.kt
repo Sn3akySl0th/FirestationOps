@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 class JvmFirebaseSyncCoordinator(
     private val firebaseEnabled: Boolean,
+    attachmentCache: com.example.firestationops.data.sync.SyncAttachmentCache,
     catalogRepository: CatalogRepository,
     attachmentRepository: AttachmentRepository,
     inspectionRepository: InspectionRepository,
@@ -24,7 +25,7 @@ class JvmFirebaseSyncCoordinator(
 ) : SyncCoordinator {
     private val syncEngine = DepartmentSyncEngine(
         cloudSyncClient = GitLiveCloudSyncClient(),
-        attachmentCache = JvmSyncAttachmentCache(),
+        attachmentCache = attachmentCache,
         catalogRepository = catalogRepository,
         attachmentRepository = attachmentRepository,
         inspectionRepository = inspectionRepository,

@@ -80,6 +80,7 @@ fun App(
     departmentCatalogBootstrap: DepartmentCatalogBootstrap = NoOpDepartmentCatalogBootstrap(),
     syncCoordinator: SyncCoordinator = NoOpSyncCoordinator(),
     syncConflictRepository: SyncConflictRepository = com.example.firestationops.domain.repository.mock.MockSyncConflictRepository(),
+    syncAttachmentCache: com.example.firestationops.data.sync.SyncAttachmentCache? = null,
     onRequestBackgroundSync: (String) -> Unit = {},
     onPrepareDepartment: (String) -> Unit = {}
 ) {
@@ -149,7 +150,9 @@ fun App(
                                     inspectionRepository = inspectionRepository,
                                     deficiencyRepository = deficiencyRepository,
                                     apparatusRepository = apparatusRepository,
-                                    attachmentRepository = attachmentRepository
+                                    attachmentRepository = attachmentRepository,
+                                    syncAttachmentCache = syncAttachmentCache,
+                                    syncCoordinator = syncCoordinator
                                 )
                             }
                             InspectionScreen(

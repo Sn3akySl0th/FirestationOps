@@ -4,6 +4,7 @@ import com.example.firestationops.currentTimeMillis
 import com.example.firestationops.data.firebase.FirestoreMappers
 import com.example.firestationops.data.firebase.FirestorePaths
 import com.example.firestationops.domain.model.Attachment
+import com.example.firestationops.domain.sync.AttachmentUploadProgressTracker
 import com.example.firestationops.domain.model.Deficiency
 import com.example.firestationops.domain.model.Incident
 import com.example.firestationops.domain.model.SyncStatus
@@ -666,21 +667,43 @@ class DepartmentSyncEngine(
             ?: error("Attachment ${attachment.id} has no local file path.")
 
         if (!attachmentCache.fileExists(localPath)) {
-            attachmentRepository.updateSyncStatus(attachment.id, SyncStatus.SYNC_FAILED)
+            attachmentRepository.markUploadFailed(
+                id = attachment.id,
+                error = "Photo file is missing on this device.",
+                failedAt = currentTimeMillis()
+            )
             error("Attachment file not found at $localPath")
         }
 
         val storagePath = FirestorePaths.attachmentStorage(attachment.departmentId, attachment.id)
-        val downloadUrl = cloudSyncClient.uploadStorageFile(storagePath, localPath)
-
-        cloudSyncClient.setDocument(
-            FirestorePaths.attachment(attachment.departmentId, attachment.id),
-            FirestoreMappers.attachmentToMap(
-                attachment.copy(remoteUrl = downloadUrl, syncStatus = SyncStatus.SYNCED)
+        try {
+            AttachmentUploadProgressTracker.reportProgress(attachment.id, 0)
+            val downloadUrl = cloudSyncClient.uploadStorageFile(
+                storagePath = storagePath,
+                localFilePath = localPath,
+                onProgress = { progress ->
+                    AttachmentUploadProgressTracker.reportProgress(attachment.id, progress)
+                }
             )
-        )
 
-        attachmentRepository.updateRemoteUrl(attachment.id, downloadUrl)
+            cloudSyncClient.setDocument(
+                FirestorePaths.attachment(attachment.departmentId, attachment.id),
+                FirestoreMappers.attachmentToMap(
+                    attachment.copy(remoteUrl = downloadUrl, syncStatus = SyncStatus.SYNCED)
+                )
+            )
+
+            attachmentRepository.updateRemoteUrl(attachment.id, downloadUrl)
+        } catch (error: Exception) {
+            attachmentRepository.markUploadFailed(
+                id = attachment.id,
+                error = error.message ?: "Photo upload failed.",
+                failedAt = currentTimeMillis()
+            )
+            throw error
+        } finally {
+            AttachmentUploadProgressTracker.clear(attachment.id)
+        }
     }
 
     private suspend fun inspectionLabel(inspection: com.example.firestationops.domain.model.Inspection): String {

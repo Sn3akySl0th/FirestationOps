@@ -91,7 +91,9 @@ CREATE TABLE AttachmentEntity (
     remoteUrl TEXT,
     syncStatus TEXT NOT NULL,
     createdAt INTEGER NOT NULL,
-    createdByUserId TEXT NOT NULL
+    createdByUserId TEXT NOT NULL,
+    lastError TEXT,
+    failedAt INTEGER
 );
 
 CREATE TABLE IncidentEntity (
@@ -373,17 +375,27 @@ selectPendingSyncAttachments:
 SELECT * FROM AttachmentEntity WHERE syncStatus != 'SYNCED';
 
 insertAttachment:
-INSERT OR REPLACE INTO AttachmentEntity(id, departmentId, localUri, remoteUrl, syncStatus, createdAt, createdByUserId)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO AttachmentEntity(id, departmentId, localUri, remoteUrl, syncStatus, createdAt, createdByUserId, lastError, failedAt)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 updateAttachmentSyncStatus:
 UPDATE AttachmentEntity
 SET syncStatus = ?
 WHERE id = ?;
 
+updateAttachmentUploadFailure:
+UPDATE AttachmentEntity
+SET syncStatus = 'SYNC_FAILED', lastError = ?, failedAt = ?
+WHERE id = ?;
+
+clearAttachmentUploadFailure:
+UPDATE AttachmentEntity
+SET syncStatus = ?, lastError = NULL, failedAt = NULL
+WHERE id = ?;
+
 updateAttachmentRemoteUrl:
 UPDATE AttachmentEntity
-SET remoteUrl = ?, syncStatus = 'SYNCED'
+SET remoteUrl = ?, syncStatus = 'SYNCED', lastError = NULL, failedAt = NULL
 WHERE id = ?;
 
 deleteAttachment:

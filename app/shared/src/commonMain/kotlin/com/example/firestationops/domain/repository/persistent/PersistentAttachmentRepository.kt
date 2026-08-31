@@ -7,6 +7,7 @@ import com.example.firestationops.domain.repository.AttachmentRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 
 class PersistentAttachmentRepository(private val database: FirestationOpsDatabase) : AttachmentRepository {
     private val _attachments = MutableStateFlow<List<Attachment>>(emptyList())
@@ -19,10 +20,14 @@ class PersistentAttachmentRepository(private val database: FirestationOpsDatabas
         _attachments.value = database.getAllAttachments()
     }
 
-    override fun getAttachmentsByDepartment(departmentId: String): Flow<List<Attachment>> = _attachments.asStateFlow()
+    override fun getAttachmentsByDepartment(departmentId: String): Flow<List<Attachment>> =
+        _attachments.asStateFlow().map { attachments ->
+            attachments.filter { it.departmentId == departmentId }
+        }
 
-    override suspend fun getAttachment(id: String): Result<Attachment> = 
-        database.getAttachmentById(id)?.let { Result.success(it) } ?: Result.failure(Exception("Attachment not found"))
+    override suspend fun getAttachment(id: String): Result<Attachment> =
+        database.getAttachmentById(id)?.let { Result.success(it) }
+            ?: Result.failure(Exception("Attachment not found"))
 
     override suspend fun saveAttachment(attachment: Attachment): Result<Unit> {
         database.insertAttachment(attachment)
@@ -36,11 +41,23 @@ class PersistentAttachmentRepository(private val database: FirestationOpsDatabas
         return Result.success(Unit)
     }
 
-    override suspend fun getPendingSyncAttachments(): Result<List<Attachment>> = 
+    override suspend fun getPendingSyncAttachments(): Result<List<Attachment>> =
         Result.success(database.getPendingSyncAttachments())
 
     override suspend fun updateSyncStatus(id: String, syncStatus: SyncStatus): Result<Unit> {
         database.updateAttachmentSyncStatus(id, syncStatus)
+        refresh()
+        return Result.success(Unit)
+    }
+
+    override suspend fun markUploadFailed(id: String, error: String, failedAt: Long): Result<Unit> {
+        database.markAttachmentUploadFailed(id, error, failedAt)
+        refresh()
+        return Result.success(Unit)
+    }
+
+    override suspend fun retryUpload(id: String): Result<Unit> {
+        database.retryAttachmentUpload(id)
         refresh()
         return Result.success(Unit)
     }

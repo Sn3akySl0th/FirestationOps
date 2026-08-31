@@ -10,5 +10,7 @@ interface AttachmentRepository {
     suspend fun deleteAttachment(id: String): Result<Unit>
     suspend fun getPendingSyncAttachments(): Result<List<Attachment>>
     suspend fun updateSyncStatus(id: String, syncStatus: com.example.firestationops.domain.model.SyncStatus): Result<Unit>
+    suspend fun markUploadFailed(id: String, error: String, failedAt: Long): Result<Unit>
+    suspend fun retryUpload(id: String): Result<Unit>
     suspend fun updateRemoteUrl(id: String, remoteUrl: String): Result<Unit>
 }

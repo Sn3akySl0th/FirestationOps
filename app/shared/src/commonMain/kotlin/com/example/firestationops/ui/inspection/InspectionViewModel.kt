@@ -6,6 +6,8 @@ import com.example.firestationops.domain.export.InspectionCsvExporter
 import com.example.firestationops.domain.export.InspectionPdfExporter
 import com.example.firestationops.domain.export.InspectionReport
 import com.example.firestationops.domain.export.InspectionReportBuilder
+import com.example.firestationops.data.sync.SyncAttachmentCache
+import com.example.firestationops.domain.sync.SyncCoordinator
 import com.example.firestationops.domain.sync.SyncStatusTransitions
 import com.example.firestationops.platform.ExportResult
 import com.example.firestationops.platform.FileExporter
@@ -39,10 +41,16 @@ class InspectionViewModel(
     private val deficiencyRepository: DeficiencyRepository,
     private val apparatusRepository: com.example.firestationops.domain.repository.ApparatusRepository,
     private val attachmentRepository: com.example.firestationops.domain.repository.AttachmentRepository,
+    private val syncAttachmentCache: SyncAttachmentCache? = null,
+    private val syncCoordinator: SyncCoordinator? = null,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main)
 ) {
     private val _uiState = MutableStateFlow(InspectionUiState())
     val uiState: StateFlow<InspectionUiState> = _uiState.asStateFlow()
+    val attachmentsById: StateFlow<Map<String, Attachment>> = attachmentRepository
+        .getAttachmentsByDepartment(member.departmentId)
+        .map { attachments -> attachments.associateBy { it.id } }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     init {
         loadData()
@@ -118,17 +126,19 @@ class InspectionViewModel(
 
     fun addAttachment(itemId: String, localPath: String) {
         scope.launch {
+            val attachmentId = "att-${randomUUID()}"
+            val durablePath = syncAttachmentCache?.copyToAttachmentPath(attachmentId, localPath) ?: localPath
             val attachment = SyncStatusTransitions.attachmentForSave(
                 Attachment(
-                    id = "att-${randomUUID()}",
+                    id = attachmentId,
                     departmentId = member.departmentId,
-                    localUri = localPath,
+                    localUri = durablePath,
                     createdAt = currentTimeMillis(),
                     createdByUserId = member.id
                 )
             )
             attachmentRepository.saveAttachment(attachment)
-            
+
             _uiState.update { state ->
                 val newResponses = state.responses.toMutableMap()
                 val currentResponse = newResponses[itemId] ?: return@update state
@@ -137,6 +147,23 @@ class InspectionViewModel(
                 state.copy(responses = newResponses)
             }
             saveDraft()
+
+            val coordinator = syncCoordinator
+            if (coordinator != null && coordinator.isAvailable()) {
+                launch(Dispatchers.Default) {
+                    coordinator.syncDepartment(member.departmentId)
+                }
+            }
+        }
+    }
+
+    fun retryAttachment(attachmentId: String) {
+        scope.launch {
+            attachmentRepository.retryUpload(attachmentId)
+            val coordinator = syncCoordinator
+            if (coordinator != null && coordinator.isAvailable()) {
+                coordinator.syncDepartment(member.departmentId)
+            }
         }
     }
 

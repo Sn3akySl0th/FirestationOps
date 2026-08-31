@@ -32,6 +32,24 @@ internal object SchemaMigration {
             parameters = 0
         )
         ensureInspectionVoidColumns(driver)
+        ensureAttachmentFailureColumns(driver)
+    }
+
+    private fun ensureAttachmentFailureColumns(driver: SqlDriver) {
+        runCatching {
+            driver.execute(
+                identifier = null,
+                sql = "ALTER TABLE AttachmentEntity ADD COLUMN lastError TEXT;",
+                parameters = 0
+            )
+        }
+        runCatching {
+            driver.execute(
+                identifier = null,
+                sql = "ALTER TABLE AttachmentEntity ADD COLUMN failedAt INTEGER;",
+                parameters = 0
+            )
+        }
     }
 
     private fun ensureInspectionVoidColumns(driver: SqlDriver) {

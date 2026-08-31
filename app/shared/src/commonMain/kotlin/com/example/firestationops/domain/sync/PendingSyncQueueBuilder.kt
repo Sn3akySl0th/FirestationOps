@@ -20,7 +20,9 @@ data class PendingSyncQueueItem(
     val recordId: String,
     val title: String,
     val detail: String?,
-    val syncStatus: SyncStatus
+    val syncStatus: SyncStatus,
+    val lastError: String? = null,
+    val canRetry: Boolean = false
 )
 
 data class SyncedRecordCounts(
@@ -43,7 +45,8 @@ data class SyncedRecordCounts(
 
 data class SyncQueueState(
     val pendingItems: List<PendingSyncQueueItem>,
-    val syncedCounts: SyncedRecordCounts
+    val syncedCounts: SyncedRecordCounts,
+    val failedAttachmentCount: Int = 0
 )
 
 object PendingSyncQueueBuilder {
@@ -71,7 +74,7 @@ object PendingSyncQueueBuilder {
             input.attachments
                 .filter { it.syncStatus != SyncStatus.SYNCED }
                 .forEach { attachment ->
-                    add(attachmentItem(attachment))
+                    add(attachmentItem(attachment, input))
                 }
             input.incidents
                 .filter { it.syncStatus != SyncStatus.SYNCED }
@@ -93,7 +96,8 @@ object PendingSyncQueueBuilder {
 
         return SyncQueueState(
             pendingItems = pendingItems,
-            syncedCounts = syncedCounts
+            syncedCounts = syncedCounts,
+            failedAttachmentCount = input.attachments.count { it.syncStatus == SyncStatus.SYNC_FAILED }
         )
     }
 
@@ -144,14 +148,54 @@ object PendingSyncQueueBuilder {
         )
     }
 
-    private fun attachmentItem(attachment: Attachment): PendingSyncQueueItem =
-        PendingSyncQueueItem(
+    private fun attachmentItem(attachment: Attachment, input: Input): PendingSyncQueueItem {
+        val parent = findAttachmentParent(attachment.id, input)
+        val title = parent?.first ?: "Photo attachment"
+        val detail = buildString {
+            parent?.second?.let { append(it) }
+            attachment.localUri?.substringAfterLast('/')?.let { fileName ->
+                if (isNotEmpty()) append(" · ")
+                append(fileName)
+            }
+            if (attachment.syncStatus == SyncStatus.SYNC_FAILED && !attachment.lastError.isNullOrBlank()) {
+                if (isNotEmpty()) append(" · ")
+                append(attachment.lastError)
+            }
+        }.ifBlank { null }
+
+        return PendingSyncQueueItem(
             recordType = PendingSyncRecordType.ATTACHMENT,
             recordId = attachment.id,
-            title = "Photo attachment",
-            detail = attachment.localUri?.substringAfterLast('/') ?: attachment.id,
-            syncStatus = attachment.syncStatus
+            title = title,
+            detail = detail,
+            syncStatus = attachment.syncStatus,
+            lastError = attachment.lastError,
+            canRetry = attachment.syncStatus == SyncStatus.SYNC_FAILED
         )
+    }
+
+    private fun findAttachmentParent(attachmentId: String, input: Input): Pair<String, String>? {
+        input.inspections.forEach { inspection ->
+            val response = inspection.responses.firstOrNull { attachmentId in it.attachmentIds } ?: return@forEach
+            val apparatusLabel = input.apparatusById[inspection.apparatusId]?.radioName ?: inspection.apparatusId
+            val templateLabel = input.templatesById[inspection.templateId]?.name ?: "Inspection"
+            val itemLabel = input.templatesById[inspection.templateId]
+                ?.items
+                ?.firstOrNull { it.id == response.itemId }
+                ?.text
+                ?: "Inspection item"
+            return "$apparatusLabel · $templateLabel" to itemLabel
+        }
+
+        input.deficiencies.forEach { deficiency ->
+            if (attachmentId in deficiency.attachmentIds) {
+                val apparatusLabel = input.apparatusById[deficiency.apparatusId]?.radioName ?: deficiency.apparatusId
+                return deficiency.title to apparatusLabel
+            }
+        }
+
+        return null
+    }
 
     private fun incidentItem(incident: Incident): PendingSyncQueueItem =
         PendingSyncQueueItem(

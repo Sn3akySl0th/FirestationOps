@@ -10,5 +10,7 @@ data class Attachment(
     val remoteUrl: String? = null,
     val syncStatus: SyncStatus = SyncStatus.LOCAL_ONLY,
     val createdAt: Long,
-    val createdByUserId: String
+    val createdByUserId: String,
+    val lastError: String? = null,
+    val failedAt: Long? = null
 )

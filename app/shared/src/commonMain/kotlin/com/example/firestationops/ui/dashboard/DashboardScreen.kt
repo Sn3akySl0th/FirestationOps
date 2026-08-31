@@ -77,7 +77,9 @@ fun DashboardScreen(
                     onSyncNowClick()
                 },
                 onDismissSyncMessage = viewModel::clearSyncMessage,
-                onOpenSyncConflictsClick = onOpenSyncConflictsClick
+                onOpenSyncConflictsClick = onOpenSyncConflictsClick,
+                onRetryAttachmentUpload = viewModel::retryAttachmentUpload,
+                onRetryAllFailedAttachments = viewModel::retryAllFailedAttachments
             )
         }
     }
@@ -98,7 +100,9 @@ private fun DashboardContent(
     onOpenDepartmentSettings: () -> Unit,
     onSyncNowClick: () -> Unit,
     onDismissSyncMessage: () -> Unit,
-    onOpenSyncConflictsClick: () -> Unit
+    onOpenSyncConflictsClick: () -> Unit,
+    onRetryAttachmentUpload: (String) -> Unit,
+    onRetryAllFailedAttachments: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -140,7 +144,9 @@ private fun DashboardContent(
                         showDepartmentSettings,
                         onOpenDepartmentSettings,
                         onSyncNowClick,
-                        onOpenSyncConflictsClick
+                        onOpenSyncConflictsClick,
+                        onRetryAttachmentUpload,
+                        onRetryAllFailedAttachments
                     )
                 }
                 LazyColumn(
@@ -168,7 +174,9 @@ private fun DashboardContent(
                     showDepartmentSettings,
                     onOpenDepartmentSettings,
                     onSyncNowClick,
-                    onOpenSyncConflictsClick
+                    onOpenSyncConflictsClick,
+                    onRetryAttachmentUpload,
+                    onRetryAllFailedAttachments
                 )
                 item { StationsSection(state.stations, onApparatusClick) }
             }
@@ -189,7 +197,9 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dashboardMainItems(
     showDepartmentSettings: Boolean,
     onOpenDepartmentSettings: () -> Unit,
     onSyncNowClick: () -> Unit,
-    onOpenSyncConflictsClick: () -> Unit
+    onOpenSyncConflictsClick: () -> Unit,
+    onRetryAttachmentUpload: (String) -> Unit,
+    onRetryAllFailedAttachments: () -> Unit
 ) {
     item {
         Text("Officer Dashboard", style = MaterialTheme.typography.headlineMedium)
@@ -210,6 +220,14 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dashboardMainItems(
         }
     }
     if (cloudSyncEnabled || state.summary.pendingSyncCount > 0 || syncState == SyncRunnerState.RUNNING) {
+        if (state.syncQueue.failedAttachmentCount > 0) {
+            item {
+                FailedAttachmentUploadCard(
+                    failedCount = state.syncQueue.failedAttachmentCount,
+                    onRetryAll = onRetryAllFailedAttachments
+                )
+            }
+        }
         item {
             SyncStatusCard(
                 pendingCount = state.summary.pendingSyncCount,
@@ -221,7 +239,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dashboardMainItems(
         item {
             SyncQueueSection(
                 syncQueue = state.syncQueue,
-                lastSyncResult = lastSyncResult
+                lastSyncResult = lastSyncResult,
+                onRetryAttachmentUpload = onRetryAttachmentUpload
             )
         }
     }
@@ -393,9 +412,42 @@ private fun SyncStatusCard(
 }
 
 @Composable
+private fun FailedAttachmentUploadCard(
+    failedCount: Int,
+    onRetryAll: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Failed photo uploads",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+                Text(
+                    "$failedCount photo${if (failedCount == 1) "" else "s"} could not reach the cloud. Retry when you have a stable connection.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+            TextButton(onClick = onRetryAll) {
+                Text("Retry all")
+            }
+        }
+    }
+}
+
+@Composable
 private fun SyncQueueSection(
     syncQueue: SyncQueueState,
-    lastSyncResult: com.example.firestationops.domain.sync.SyncResult?
+    lastSyncResult: com.example.firestationops.domain.sync.SyncResult?,
+    onRetryAttachmentUpload: (String) -> Unit
 ) {
     var showSyncedDetails by remember { mutableStateOf(false) }
     var showLastSyncDetails by remember { mutableStateOf(false) }
@@ -421,7 +473,14 @@ private fun SyncQueueSection(
                 )
             } else {
                 syncQueue.pendingItems.forEach { item ->
-                    PendingSyncQueueRow(item)
+                    PendingSyncQueueRow(
+                        item = item,
+                        onRetry = if (item.canRetry) {
+                            { onRetryAttachmentUpload(item.recordId) }
+                        } else {
+                            null
+                        }
+                    )
                 }
             }
 
@@ -538,7 +597,10 @@ private fun SyncActivityActionBadge(label: String) {
 }
 
 @Composable
-private fun PendingSyncQueueRow(item: PendingSyncQueueItem) {
+private fun PendingSyncQueueRow(
+    item: PendingSyncQueueItem,
+    onRetry: (() -> Unit)? = null
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -555,7 +617,14 @@ private fun PendingSyncQueueRow(item: PendingSyncQueueItem) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        SyncStatusBadge(item.syncStatus)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (onRetry != null) {
+                TextButton(onClick = onRetry) {
+                    Text("Retry")
+                }
+            }
+            SyncStatusBadge(item.syncStatus)
+        }
     }
 }
 

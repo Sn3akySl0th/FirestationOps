@@ -11,11 +11,16 @@ interface CloudSyncClient {
     suspend fun listCollection(collectionPath: String): List<CloudDocument>
     suspend fun setDocument(documentPath: String, data: Map<String, Any?>, merge: Boolean = true)
     suspend fun deleteDocument(documentPath: String)
-    suspend fun uploadStorageFile(storagePath: String, localFilePath: String): String
+    suspend fun uploadStorageFile(
+        storagePath: String,
+        localFilePath: String,
+        onProgress: ((Int) -> Unit)? = null
+    ): String
     suspend fun downloadStorageFile(storagePath: String, localFilePath: String)
 }
 
 interface SyncAttachmentCache {
     fun attachmentFilePath(attachmentId: String): String
     fun fileExists(path: String): Boolean
+    fun copyToAttachmentPath(attachmentId: String, sourcePath: String): String
 }

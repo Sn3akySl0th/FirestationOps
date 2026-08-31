@@ -24,6 +24,7 @@ fun main() = application {
             departmentCatalogBootstrap = graph.departmentCatalogBootstrap,
             syncCoordinator = graph.syncCoordinator,
             syncConflictRepository = graph.syncConflictRepository,
+            syncAttachmentCache = graph.syncAttachmentCache,
             onRequestBackgroundSync = graph::requestBackgroundSync,
             onPrepareDepartment = graph::prepareDepartment
         )

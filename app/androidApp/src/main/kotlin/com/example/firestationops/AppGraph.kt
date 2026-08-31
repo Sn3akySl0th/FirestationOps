@@ -34,6 +34,8 @@ import com.example.firestationops.domain.repository.persistent.PersistentDepartm
 import com.example.firestationops.domain.repository.persistent.PersistentIncidentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentInspectionRepository
 import com.example.firestationops.domain.repository.persistent.PersistentMemberRosterRepository
+import com.example.firestationops.data.firebase.AndroidSyncAttachmentCache
+import com.example.firestationops.data.sync.SyncAttachmentCache
 import com.example.firestationops.domain.sync.NoOpSyncCoordinator
 import com.example.firestationops.domain.sync.SyncCoordinator
 
@@ -49,6 +51,7 @@ class AppGraph(
     val inspectionRepository: InspectionRepository = PersistentInspectionRepository(database)
     val deficiencyRepository: DeficiencyRepository = PersistentDeficiencyRepository(database)
     val attachmentRepository: AttachmentRepository = PersistentAttachmentRepository(database)
+    val syncAttachmentCache: SyncAttachmentCache = AndroidSyncAttachmentCache(context)
     val incidentRepository: IncidentRepository = PersistentIncidentRepository(database)
     val departmentRepository: DepartmentRepository = PersistentDepartmentRepository(database)
 
@@ -116,6 +119,7 @@ class AppGraph(
         FirebaseSyncCoordinator(
             context = context,
             firebaseEnabled = true,
+            attachmentCache = syncAttachmentCache,
             catalogRepository = catalogRepository,
             attachmentRepository = attachmentRepository,
             inspectionRepository = inspectionRepository,

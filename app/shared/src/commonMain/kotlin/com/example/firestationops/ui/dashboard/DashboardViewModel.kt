@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
@@ -104,6 +105,33 @@ class DashboardViewModel(
 
     fun clearSyncMessage() {
         _syncMessage.value = null
+    }
+
+    fun retryAttachmentUpload(attachmentId: String) {
+        if (!syncCoordinator.isAvailable()) {
+            _syncMessage.value = "Cloud sync is not configured on this device."
+            return
+        }
+
+        viewModelScope.launch {
+            attachmentRepository.retryUpload(attachmentId)
+            syncNow()
+        }
+    }
+
+    fun retryAllFailedAttachments() {
+        if (!syncCoordinator.isAvailable()) {
+            _syncMessage.value = "Cloud sync is not configured on this device."
+            return
+        }
+
+        viewModelScope.launch {
+            attachmentRepository.getAttachmentsByDepartment(departmentId)
+                .first()
+                .filter { it.syncStatus == com.example.firestationops.domain.model.SyncStatus.SYNC_FAILED }
+                .forEach { attachmentRepository.retryUpload(it.id) }
+            syncNow()
+        }
     }
 
     private fun buildDashboardState(

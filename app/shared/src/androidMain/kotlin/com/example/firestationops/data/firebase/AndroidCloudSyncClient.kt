@@ -6,8 +6,11 @@ import com.example.firestationops.data.sync.CloudSyncClient
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 import java.io.File
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 class AndroidCloudSyncClient(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -46,15 +49,36 @@ class AndroidCloudSyncClient(
         FirestoreReferenceFactory.document(firestore, documentPath).delete().await()
     }
 
-    override suspend fun uploadStorageFile(storagePath: String, localFilePath: String): String {
-        val file = File(localFilePath)
-        return storage.reference.child(storagePath)
-            .putFile(Uri.fromFile(file))
-            .await()
-            .storage
-            .downloadUrl
-            .await()
-            .toString()
+    override suspend fun uploadStorageFile(
+        storagePath: String,
+        localFilePath: String,
+        onProgress: ((Int) -> Unit)?
+    ): String {
+        val reference = storage.reference.child(storagePath)
+        val uploadTask = reference.putFile(Uri.fromFile(File(localFilePath)))
+
+        if (onProgress == null) {
+            uploadTask.await()
+            return reference.downloadUrl.await().toString()
+        }
+
+        return suspendCancellableCoroutine { continuation ->
+            uploadTask.addOnProgressListener { snapshot ->
+                if (snapshot.totalByteCount > 0L) {
+                    val percent = ((100.0 * snapshot.bytesTransferred) / snapshot.totalByteCount).toInt()
+                    onProgress(percent.coerceIn(0, 99))
+                }
+            }
+            uploadTask.addOnSuccessListener {
+                reference.downloadUrl
+                    .addOnSuccessListener { uri ->
+                        onProgress(100)
+                        continuation.resume(uri.toString())
+                    }
+                    .addOnFailureListener { error -> continuation.resumeWithException(error) }
+            }.addOnFailureListener { error -> continuation.resumeWithException(error) }
+            continuation.invokeOnCancellation { uploadTask.cancel() }
+        }
     }
 
     override suspend fun downloadStorageFile(storagePath: String, localFilePath: String) {

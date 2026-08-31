@@ -24,9 +24,15 @@ class GitLiveCloudSyncClient : CloudSyncClient {
         JvmGoogleFirestoreClient.deleteDocument(documentPath)
     }
 
-    override suspend fun uploadStorageFile(storagePath: String, localFilePath: String): String {
+    override suspend fun uploadStorageFile(
+        storagePath: String,
+        localFilePath: String,
+        onProgress: ((Int) -> Unit)?
+    ): String {
         val reference = storage.reference.child(storagePath)
+        onProgress?.invoke(0)
         reference.putFile(Uri.fromFile(File(localFilePath))).await()
+        onProgress?.invoke(100)
         return reference.downloadUrl.await().toString()
     }
 
