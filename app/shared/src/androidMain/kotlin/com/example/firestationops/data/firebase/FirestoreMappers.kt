@@ -27,6 +27,9 @@ import kotlinx.serialization.json.Json
 internal object FirestorePaths {
     fun member(uid: String) = "members/$uid"
 
+    fun memberInvite(email: String) =
+        "memberInvites/${com.example.firestationops.domain.membership.MemberProvisioningRules.normalizeEmailForInviteId(email)}"
+
     fun department(departmentId: String) = "departments/$departmentId"
 
     fun departmentMember(departmentId: String, memberId: String) =
@@ -81,6 +84,9 @@ internal object FirestoreMappers {
         "createdAt" to member.createdAt,
         "updatedAt" to member.updatedAt
     )
+
+    fun memberInviteToMap(member: Member, pendingMemberId: String? = null): Map<String, Any?> =
+        memberToMap(member) + mapOf("pendingMemberId" to pendingMemberId)
 
     fun departmentToMap(department: Department): Map<String, Any?> = mapOf(
         "id" to department.id,

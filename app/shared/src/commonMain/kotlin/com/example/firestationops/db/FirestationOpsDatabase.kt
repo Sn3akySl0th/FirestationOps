@@ -415,6 +415,10 @@ class FirestationOpsDatabase(driver: SqlDriver) {
         )
     }
 
+    fun deleteMemberById(id: String) {
+        dbQueries.deleteMemberById(id)
+    }
+
     // Session
     fun getSessionUserId(): String? = dbQueries.selectSession().executeAsOneOrNull()
 

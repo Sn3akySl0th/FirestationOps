@@ -68,6 +68,7 @@ fun App(
     attachmentRepository: AttachmentRepository,
     incidentRepository: IncidentRepository,
     departmentRepository: DepartmentRepository,
+    memberRosterRepository: MemberRosterRepository = NoOpMemberRosterRepository(),
     departmentCatalogBootstrap: DepartmentCatalogBootstrap = NoOpDepartmentCatalogBootstrap(),
     syncCoordinator: SyncCoordinator = NoOpSyncCoordinator(),
     onRequestBackgroundSync: () -> Unit = {},
@@ -208,6 +209,7 @@ fun App(
                                 DepartmentSettingsViewModel(
                                     member = state.member,
                                     departmentRepository = departmentRepository,
+                                    memberRosterRepository = memberRosterRepository,
                                     departmentCatalogBootstrap = departmentCatalogBootstrap,
                                     syncCoordinator = syncCoordinator
                                 )

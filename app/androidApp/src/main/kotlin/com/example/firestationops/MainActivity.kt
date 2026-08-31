@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
                 attachmentRepository = graph.attachmentRepository,
                 incidentRepository = graph.incidentRepository,
                 departmentRepository = graph.departmentRepository,
+                memberRosterRepository = graph.memberRosterRepository,
                 departmentCatalogBootstrap = graph.departmentCatalogBootstrap,
                 syncCoordinator = graph.syncCoordinator,
                 onRequestBackgroundSync = {

@@ -4,6 +4,8 @@ import android.content.Context
 import com.example.firestationops.data.firebase.FirebaseAuthRepository
 import com.example.firestationops.data.firebase.FirebaseAvailability
 import com.example.firestationops.data.firebase.FirebaseDepartmentCatalogBootstrap
+import com.example.firestationops.data.firebase.FirebaseMemberAccountProvisioner
+import com.example.firestationops.data.firebase.FirebaseMemberRosterRepository
 import com.example.firestationops.data.firebase.FirebaseSyncCoordinator
 import com.example.firestationops.db.DatabaseDriverFactory
 import com.example.firestationops.db.FirestationOpsDatabase
@@ -18,6 +20,7 @@ import com.example.firestationops.domain.repository.CatalogRepository
 import com.example.firestationops.domain.repository.DeficiencyRepository
 import com.example.firestationops.domain.repository.DepartmentRepository
 import com.example.firestationops.domain.repository.IncidentRepository
+import com.example.firestationops.domain.repository.MemberRosterRepository
 import com.example.firestationops.domain.repository.InspectionRepository
 import com.example.firestationops.domain.repository.persistent.PersistentApparatusRepository
 import com.example.firestationops.domain.repository.persistent.PersistentAttachmentRepository
@@ -27,6 +30,7 @@ import com.example.firestationops.domain.repository.persistent.PersistentDeficie
 import com.example.firestationops.domain.repository.persistent.PersistentDepartmentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentIncidentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentInspectionRepository
+import com.example.firestationops.domain.repository.persistent.PersistentMemberRosterRepository
 import com.example.firestationops.domain.sync.NoOpSyncCoordinator
 import com.example.firestationops.domain.sync.SyncCoordinator
 
@@ -44,6 +48,19 @@ class AppGraph(context: Context) {
 
     private val localAuthRepository: PersistentAuthRepository = PersistentAuthRepository(database)
     val firebaseEnabled: Boolean = FirebaseAvailability.isConfigured(context)
+
+    private val localMemberRosterRepository = PersistentMemberRosterRepository(database)
+    private val memberAccountProvisioner = FirebaseMemberAccountProvisioner(context)
+    val memberRosterRepository: MemberRosterRepository = if (firebaseEnabled) {
+        FirebaseMemberRosterRepository(
+            local = localMemberRosterRepository,
+            database = database,
+            firebaseEnabled = true,
+            accountProvisioner = memberAccountProvisioner
+        )
+    } else {
+        localMemberRosterRepository
+    }
 
     val catalogRepository: CatalogRepository = PersistentCatalogRepository(database) {
         (apparatusRepository as PersistentApparatusRepository).refreshCatalog()
