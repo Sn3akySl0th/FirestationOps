@@ -83,6 +83,9 @@ class PersistentInspectionRepository(private val database: FirestationOpsDatabas
         database.getAllTemplates().find { it.id == id }?.let { Result.success(it) } 
             ?: Result.failure(Exception("Template not found"))
 
+    override suspend fun getInspection(id: String): Result<Inspection?> =
+        Result.success(database.getInspectionById(id))
+
     override suspend fun saveInspection(inspection: Inspection): Result<Unit> {
         database.insertInspection(inspection)
         refresh()

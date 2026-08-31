@@ -132,7 +132,10 @@ class FirestationOpsDatabase(driver: SqlDriver) {
         )
 
     fun getInspectionsByDepartment(departmentId: String): List<Inspection> =
-        dbQueries.selectInspectionsByDepartment(departmentId).executeAsList().map { row ->
+        dbQueries.selectInspectionsByDepartment(departmentId).executeAsList().map(::mapInspectionRow)
+
+    fun getInspectionById(id: String): Inspection? =
+        dbQueries.selectInspectionById(id).executeAsOneOrNull()?.let { row ->
             mapInspectionRow(row)
         }
 

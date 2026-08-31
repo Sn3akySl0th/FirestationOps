@@ -181,6 +181,9 @@ SELECT * FROM InspectionEntity WHERE apparatusId = ?;
 selectInspectionsByDepartment:
 SELECT * FROM InspectionEntity WHERE departmentId = ?;
 
+selectInspectionById:
+SELECT * FROM InspectionEntity WHERE id = ?;
+
 selectLatestFinalizedByApparatus:
 SELECT * FROM InspectionEntity
 WHERE apparatusId = ? AND isFinalized = 1 AND completedAt IS NOT NULL

@@ -137,6 +137,15 @@ class PersistentIncidentRepository(private val database: FirestationOpsDatabase)
         return Result.success(Unit)
     }
 
+    override suspend fun findCommandLogEntry(id: String): CommandLogEntry? =
+        _commandLog.value.find { it.id == id }
+
+    override suspend fun findUnitAssignment(id: String): IncidentUnitAssignment? =
+        _unitAssignments.value.find { it.id == id }
+
+    override suspend fun findPersonnelAssignment(id: String): PersonnelAssignment? =
+        _personnelAssignments.value.find { it.id == id }
+
     override suspend fun getPendingSyncIncidents(): Result<List<Incident>> =
         Result.success(database.getPendingSyncIncidents())
 

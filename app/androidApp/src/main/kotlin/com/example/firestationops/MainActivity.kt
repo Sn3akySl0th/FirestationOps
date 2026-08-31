@@ -37,7 +37,7 @@ class MainActivity : ComponentActivity() {
                 catalogAdminRepository = graph.catalogAdminRepository,
                 departmentCatalogBootstrap = graph.departmentCatalogBootstrap,
                 syncCoordinator = graph.syncCoordinator,
-                onRequestBackgroundSync = {
+                onRequestBackgroundSync = { _ ->
                     if (graph.firebaseEnabled) {
                         SyncScheduler.runNow(this@MainActivity)
                     }

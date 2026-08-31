@@ -1,0 +1,6 @@
+{
+  "projectId": "your-firebase-project-id",
+  "apiKey": "REPLACE_WITH_WEB_OR_ANDROID_API_KEY",
+  "applicationId": "1:000000000000:web:0000000000000000000000",
+  "storageBucket": "your-firebase-project-id.appspot.com"
+}

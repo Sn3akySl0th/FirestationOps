@@ -10,7 +10,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -20,6 +22,10 @@ import com.example.firestationops.domain.model.ApparatusInspectionStatus
 import com.example.firestationops.domain.model.ApparatusStatus
 import com.example.firestationops.domain.model.InspectionComplianceStatus
 import com.example.firestationops.domain.model.Station
+import com.example.firestationops.domain.model.SyncStatus
+import com.example.firestationops.domain.sync.PendingSyncQueueBuilder
+import com.example.firestationops.domain.sync.PendingSyncQueueItem
+import com.example.firestationops.domain.sync.SyncQueueState
 import com.example.firestationops.domain.sync.SyncRunnerState
 import com.example.firestationops.ui.deficiency.DeficiencyItem
 import com.example.firestationops.ui.deficiency.DeficiencyWithApparatus
@@ -38,6 +44,7 @@ fun DashboardScreen(
     val uiState by viewModel.uiState.collectAsState()
     val syncMessage by viewModel.syncMessage.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
+    val lastSyncResult by viewModel.lastSyncResult.collectAsState()
     val cloudSyncEnabled = viewModel.cloudSyncEnabled
 
     when (val state = uiState) {
@@ -56,6 +63,7 @@ fun DashboardScreen(
                 state = state,
                 syncState = syncState,
                 syncMessage = syncMessage,
+                lastSyncResult = lastSyncResult,
                 cloudSyncEnabled = cloudSyncEnabled,
                 onApparatusClick = onApparatusClick,
                 onOpenDeficienciesClick = onOpenDeficienciesClick,
@@ -78,6 +86,7 @@ private fun DashboardContent(
     state: DashboardUiState.Success,
     syncState: SyncRunnerState,
     syncMessage: String?,
+    lastSyncResult: com.example.firestationops.domain.sync.SyncResult?,
     cloudSyncEnabled: Boolean,
     onApparatusClick: (String) -> Unit,
     onOpenDeficienciesClick: () -> Unit,
@@ -119,6 +128,7 @@ private fun DashboardContent(
                     dashboardMainItems(
                         state,
                         syncState,
+                        lastSyncResult,
                         cloudSyncEnabled,
                         onApparatusClick,
                         onOpenDeficienciesClick,
@@ -145,6 +155,7 @@ private fun DashboardContent(
                 dashboardMainItems(
                     state,
                     syncState,
+                    lastSyncResult,
                     cloudSyncEnabled,
                     onApparatusClick,
                     onOpenDeficienciesClick,
@@ -164,6 +175,7 @@ private fun DashboardContent(
 private fun androidx.compose.foundation.lazy.LazyListScope.dashboardMainItems(
     state: DashboardUiState.Success,
     syncState: SyncRunnerState,
+    lastSyncResult: com.example.firestationops.domain.sync.SyncResult?,
     cloudSyncEnabled: Boolean,
     onApparatusClick: (String) -> Unit,
     onOpenDeficienciesClick: () -> Unit,
@@ -198,6 +210,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.dashboardMainItems(
                 syncState = syncState,
                 cloudSyncEnabled = cloudSyncEnabled,
                 onSyncNowClick = onSyncNowClick
+            )
+        }
+        item {
+            SyncQueueSection(
+                syncQueue = state.syncQueue,
+                lastSyncResult = lastSyncResult
             )
         }
     }
@@ -339,6 +357,217 @@ private fun SyncStatusCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SyncQueueSection(
+    syncQueue: SyncQueueState,
+    lastSyncResult: com.example.firestationops.domain.sync.SyncResult?
+) {
+    var showSyncedDetails by remember { mutableStateOf(false) }
+    var showLastSyncDetails by remember { mutableStateOf(false) }
+
+    Card {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Sync queue", style = MaterialTheme.typography.titleMedium)
+
+            Text(
+                if (syncQueue.pendingItems.isEmpty()) {
+                    "No records waiting to upload."
+                } else {
+                    "Waiting to upload (${syncQueue.pendingItems.size})"
+                },
+                style = MaterialTheme.typography.labelLarge
+            )
+
+            if (syncQueue.pendingItems.isEmpty()) {
+                Text(
+                    "Local changes will appear here until they reach the cloud.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                syncQueue.pendingItems.forEach { item ->
+                    PendingSyncQueueRow(item)
+                }
+            }
+
+            HorizontalDivider()
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Synced to cloud", style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        if (syncQueue.syncedCounts.total > 0) {
+                            syncQueue.syncedCounts.summaryLabel()
+                        } else {
+                            "No local records synced yet."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (syncQueue.syncedCounts.total > 0) {
+                    TextButton(onClick = { showSyncedDetails = !showSyncedDetails }) {
+                        Text(if (showSyncedDetails) "Hide" else "Details")
+                    }
+                }
+            }
+
+            if (showSyncedDetails && syncQueue.syncedCounts.total > 0) {
+                SyncedCountsDetails(syncQueue.syncedCounts)
+            }
+
+            if (lastSyncResult != null) {
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Last sync", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            buildString {
+                                append(com.example.firestationops.domain.sync.SyncMessageFormatter.downloadedSummary(lastSyncResult))
+                                append(" · ")
+                                append(com.example.firestationops.domain.sync.SyncMessageFormatter.uploadedSummary(lastSyncResult))
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (lastSyncResult.downloadedItems.isNotEmpty() || lastSyncResult.uploadedItems.isNotEmpty()) {
+                        TextButton(onClick = { showLastSyncDetails = !showLastSyncDetails }) {
+                            Text(if (showLastSyncDetails) "Hide" else "Details")
+                        }
+                    }
+                }
+
+                if (showLastSyncDetails) {
+                    if (lastSyncResult.downloadedItems.isNotEmpty()) {
+                        Text("Downloaded", style = MaterialTheme.typography.labelMedium)
+                        lastSyncResult.downloadedItems.forEach { item ->
+                            SyncActivityRow(item)
+                        }
+                    }
+                    if (lastSyncResult.uploadedItems.isNotEmpty()) {
+                        Text("Uploaded", style = MaterialTheme.typography.labelMedium)
+                        lastSyncResult.uploadedItems.forEach { item ->
+                            SyncActivityRow(item)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SyncActivityRow(item: com.example.firestationops.domain.sync.SyncActivityItem) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(item.title, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                buildString {
+                    append(item.recordType.label)
+                    item.detail?.let { append(" · $it") }
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        SyncActivityActionBadge(item.actionLabel())
+    }
+}
+
+@Composable
+private fun SyncActivityActionBadge(label: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.small
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer
+        )
+    }
+}
+
+@Composable
+private fun PendingSyncQueueRow(item: PendingSyncQueueItem) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(item.title, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                buildString {
+                    append(item.recordType.label)
+                    item.detail?.let { append(" · $it") }
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        SyncStatusBadge(item.syncStatus)
+    }
+}
+
+@Composable
+private fun SyncedCountsDetails(
+    syncedCounts: com.example.firestationops.domain.sync.SyncedRecordCounts
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (syncedCounts.inspections > 0) {
+            Text("Inspections: ${syncedCounts.inspections}", style = MaterialTheme.typography.bodySmall)
+        }
+        if (syncedCounts.deficiencies > 0) {
+            Text("Deficiencies: ${syncedCounts.deficiencies}", style = MaterialTheme.typography.bodySmall)
+        }
+        if (syncedCounts.attachments > 0) {
+            Text("Attachments: ${syncedCounts.attachments}", style = MaterialTheme.typography.bodySmall)
+        }
+        if (syncedCounts.incidents > 0) {
+            Text("Incidents: ${syncedCounts.incidents}", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun SyncStatusBadge(syncStatus: SyncStatus) {
+    val (label, color) = when (syncStatus) {
+        SyncStatus.SYNC_FAILED -> PendingSyncQueueBuilder.statusLabel(syncStatus) to MaterialTheme.colorScheme.error
+        SyncStatus.CONFLICT -> PendingSyncQueueBuilder.statusLabel(syncStatus) to MaterialTheme.colorScheme.error
+        SyncStatus.PENDING_SYNC -> PendingSyncQueueBuilder.statusLabel(syncStatus) to Color(0xFFE65100)
+        SyncStatus.LOCAL_ONLY -> PendingSyncQueueBuilder.statusLabel(syncStatus) to Color(0xFF1565C0)
+        SyncStatus.SYNCED -> PendingSyncQueueBuilder.statusLabel(syncStatus) to Color(0xFF2E7D32)
+    }
+
+    Surface(
+        color = color.copy(alpha = 0.1f),
+        shape = MaterialTheme.shapes.small,
+        border = androidx.compose.foundation.BorderStroke(1.dp, color)
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = color
+        )
     }
 }
 

@@ -26,6 +26,21 @@ FirestationOps uses Firebase Authentication, Cloud Firestore, and Cloud Storage 
 
 Without `google-services.json`, the app continues to use local simulated auth and offline-only persistence.
 
+## Windows desktop configuration
+
+The desktop app uses the [GitLive Firebase Kotlin SDK](https://github.com/GitLiveApp/firebase-kotlin-sdk) on JVM. Register a **Web** app in the Firebase console (or reuse Android app credentials) and create a local config file.
+
+1. Copy `app/desktopApp/firebase-desktop.json.example` to one of:
+   - `firebase-desktop.json` in the working directory when launching the desktop app
+   - `%USERPROFILE%\.firestationops\firebase.json`
+   - Or set `FIRESTATIONOPS_FIREBASE_CONFIG` to the full path of your JSON file
+2. Fill in `projectId`, `apiKey`, `applicationId`, and `storageBucket` from the Firebase console.
+3. Rebuild and run the desktop app. When the config file is present, the app uses Firebase Auth and sync on sign-in and when you tap **Sync now**.
+
+Without a desktop Firebase config file, the desktop app continues to use local simulated auth and offline-only persistence.
+
+Member account creation (initial password provisioning) remains Android-only. Desktop can manage rosters locally and sync existing cloud members after sign-in.
+
 ## Member provisioning
 
 Each signed-in user must have a profile document:

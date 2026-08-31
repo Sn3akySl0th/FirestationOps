@@ -3,6 +3,7 @@ package com.example.firestationops.ui.dashboard
 import com.example.firestationops.domain.model.*
 import com.example.firestationops.domain.repository.mock.*
 import com.example.firestationops.domain.sync.NoOpSyncCoordinator
+import com.example.firestationops.domain.sync.PendingSyncRecordType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -117,5 +118,36 @@ class DashboardViewModelTest {
 
         val state = viewModel.uiState.first { it is DashboardUiState.Success } as DashboardUiState.Success
         assertEquals(1, state.summary.outOfServiceApparatusCount)
+    }
+
+    @Test
+    fun syncQueue_listsPendingInspectionsOnDashboard() = runTest {
+        inspectionRepository.saveInspection(
+            Inspection(
+                id = "insp-pending",
+                templateId = "tmpl-engine",
+                apparatusId = "ap-1",
+                departmentId = departmentId,
+                startedAt = fixedNow,
+                startedByUserId = "admin-1",
+                syncStatus = SyncStatus.PENDING_SYNC
+            )
+        )
+
+        val viewModel = DashboardViewModel(
+            departmentId = departmentId,
+            apparatusRepository = apparatusRepository,
+            deficiencyRepository = deficiencyRepository,
+            inspectionRepository = inspectionRepository,
+            attachmentRepository = attachmentRepository,
+            incidentRepository = incidentRepository,
+            syncCoordinator = syncCoordinator,
+            nowMillis = { fixedNow }
+        )
+
+        val state = viewModel.uiState.first { it is DashboardUiState.Success } as DashboardUiState.Success
+        assertEquals(1, state.pendingSyncCount)
+        assertEquals(1, state.syncQueue.pendingItems.size)
+        assertEquals(PendingSyncRecordType.INSPECTION, state.syncQueue.pendingItems.single().recordType)
     }
 }

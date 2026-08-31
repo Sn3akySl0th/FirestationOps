@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface DeficiencyRepository {
     fun getDeficienciesForApparatus(apparatusId: String): Flow<List<Deficiency>>
+    fun getDeficienciesByDepartment(departmentId: String): Flow<List<Deficiency>>
     fun getOpenDeficiencies(departmentId: String): Flow<List<Deficiency>>
     suspend fun saveDeficiency(deficiency: Deficiency): Result<Unit>
     suspend fun getDeficiency(id: String): Result<Deficiency>

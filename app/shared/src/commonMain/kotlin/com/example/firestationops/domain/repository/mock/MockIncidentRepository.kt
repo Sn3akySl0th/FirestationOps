@@ -61,6 +61,15 @@ class MockIncidentRepository : IncidentRepository {
         return Result.success(Unit)
     }
 
+    override suspend fun findCommandLogEntry(id: String): CommandLogEntry? =
+        commandLog.value.find { it.id == id }
+
+    override suspend fun findUnitAssignment(id: String): IncidentUnitAssignment? =
+        unitAssignments.value.find { it.id == id }
+
+    override suspend fun findPersonnelAssignment(id: String): PersonnelAssignment? =
+        personnelAssignments.value.find { it.id == id }
+
     override suspend fun getPendingSyncIncidents(): Result<List<Incident>> =
         Result.success(incidents.value.filter { it.syncStatus != SyncStatus.SYNCED })
 

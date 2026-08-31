@@ -75,7 +75,7 @@ fun App(
     catalogAdminRepository: CatalogAdminRepository = NoOpCatalogAdminRepository(),
     departmentCatalogBootstrap: DepartmentCatalogBootstrap = NoOpDepartmentCatalogBootstrap(),
     syncCoordinator: SyncCoordinator = NoOpSyncCoordinator(),
-    onRequestBackgroundSync: () -> Unit = {},
+    onRequestBackgroundSync: (String) -> Unit = {},
     onPrepareDepartment: (String) -> Unit = {}
 ) {
     val loginViewModel = remember { LoginViewModel(authRepository) }
@@ -128,7 +128,7 @@ fun App(
                                         showDepartmentSettings = state.member.hasRole(Role.OFFICER),
                                         onOpenDepartmentSettings = { currentScreen = Screen.DepartmentSettings },
                                         onSyncNowClick = {
-                                            onRequestBackgroundSync()
+                                            onRequestBackgroundSync(state.member.departmentId)
                                         }
                                     )
                                 }

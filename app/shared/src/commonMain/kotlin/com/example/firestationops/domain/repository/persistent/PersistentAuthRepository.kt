@@ -1,6 +1,7 @@
 package com.example.firestationops.domain.repository.persistent
 
 import com.example.firestationops.db.FirestationOpsDatabase
+import com.example.firestationops.domain.auth.AuthSessionRecovery
 import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
 import com.example.firestationops.domain.bootstrap.DepartmentCatalogProfiles
 import com.example.firestationops.domain.model.*
@@ -89,19 +90,15 @@ class PersistentAuthRepository(private val database: FirestationOpsDatabase) : A
 
     private fun recoverSession() {
         try {
-            val userId = database.getSessionUserId()
-            println("AuthRepository: Recovering session. Found userId: $userId")
-            if (userId != null) {
-                val member = database.getMemberById(userId)
-                if (member != null) {
-                    println("AuthRepository: Session recovered for ${member.email}")
-                    _userState.value = UserState.Authenticated(member)
-                } else {
-                    println("AuthRepository: Member $userId not found. Clearing session.")
-                    database.setSessionUserId(null)
-                }
-            } else {
-                println("AuthRepository: No session found in database.")
+            println("AuthRepository: Recovering session.")
+            _userState.value = AuthSessionRecovery.recoverLocalSession(database)
+            when (val state = _userState.value) {
+                is UserState.Authenticated ->
+                    println("AuthRepository: Session recovered for ${state.member.email}")
+                is UserState.Error ->
+                    println("AuthRepository: Session recovery error: ${state.message}")
+                else ->
+                    println("AuthRepository: No session found in database.")
             }
         } catch (e: Exception) {
             println("AuthRepository: Error recovering session: ${e.message}")

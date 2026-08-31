@@ -16,6 +16,9 @@ class MockDeficiencyRepository : DeficiencyRepository {
     override fun getDeficienciesForApparatus(apparatusId: String): Flow<List<Deficiency>> = 
         deficiencies.map { list -> list.filter { it.apparatusId == apparatusId } }
 
+    override fun getDeficienciesByDepartment(departmentId: String): Flow<List<Deficiency>> =
+        deficiencies.map { list -> list.filter { it.departmentId == departmentId } }
+
     override fun getOpenDeficiencies(departmentId: String): Flow<List<Deficiency>> =
         deficiencies.map { list -> 
             list.filter { it.departmentId == departmentId && (it.status == DeficiencyStatus.OPEN || it.status == DeficiencyStatus.ASSIGNED) } 

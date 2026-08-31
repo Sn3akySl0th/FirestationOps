@@ -28,7 +28,7 @@ import com.example.firestationops.domain.membership.CalhounMembershipNormalizer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-internal object FirestorePaths {
+object FirestorePaths {
     fun member(uid: String) = "members/$uid"
 
     fun memberInvite(email: String) =
@@ -73,7 +73,7 @@ internal object FirestorePaths {
         "departments/$departmentId/attachments/$attachmentId.jpg"
 }
 
-internal object FirestoreMappers {
+object FirestoreMappers {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun memberToMap(member: Member): Map<String, Any?> = mapOf(

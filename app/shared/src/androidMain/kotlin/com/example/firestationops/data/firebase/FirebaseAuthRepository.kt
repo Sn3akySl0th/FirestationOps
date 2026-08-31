@@ -2,6 +2,7 @@ package com.example.firestationops.data.firebase
 
 import com.example.firestationops.currentTimeMillis
 import com.example.firestationops.db.FirestationOpsDatabase
+import com.example.firestationops.domain.auth.AuthSessionRecovery
 import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
 import com.example.firestationops.domain.bootstrap.DepartmentCatalogProfiles
 import com.example.firestationops.domain.membership.CalhounMembershipNormalizer
@@ -43,20 +44,15 @@ class FirebaseAuthRepository(
 
     private fun recoverFirebaseSession() {
         val firebaseUser = auth.currentUser
-        if (firebaseUser == null) {
-            _userState.value = UserState.Unauthenticated
-            return
-        }
-
-        val cachedMember = database.getMemberById(firebaseUser.uid)?.let(CalhounMembershipNormalizer::normalize)
-        if (cachedMember != null) {
-            MemberProvisioningRules.validateMemberProfile(cachedMember)?.let { message ->
-                _userState.value = UserState.Error(message)
+        if (firebaseUser != null) {
+            val cachedMember = database.getMemberById(firebaseUser.uid)?.let(CalhounMembershipNormalizer::normalize)
+            if (cachedMember != null) {
+                _userState.value = AuthSessionRecovery.activateMember(database, cachedMember)
                 return
             }
-            database.setSessionUserId(cachedMember.id)
-            _userState.value = UserState.Authenticated(cachedMember)
         }
+
+        _userState.value = AuthSessionRecovery.recoverLocalSession(database)
     }
 
     override suspend fun login(email: String, password: String): Result<Unit> {

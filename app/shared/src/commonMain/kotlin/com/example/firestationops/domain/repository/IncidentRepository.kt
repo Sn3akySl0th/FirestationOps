@@ -17,6 +17,9 @@ interface IncidentRepository {
     fun getPersonnelAssignments(incidentId: String): Flow<List<PersonnelAssignment>>
     suspend fun saveUnitAssignment(assignment: IncidentUnitAssignment): Result<Unit>
     suspend fun savePersonnelAssignment(assignment: PersonnelAssignment): Result<Unit>
+    suspend fun findCommandLogEntry(id: String): CommandLogEntry?
+    suspend fun findUnitAssignment(id: String): IncidentUnitAssignment?
+    suspend fun findPersonnelAssignment(id: String): PersonnelAssignment?
     suspend fun getPendingSyncIncidents(): Result<List<Incident>>
     suspend fun getPendingSyncCommandLogEntries(): Result<List<CommandLogEntry>>
     suspend fun getPendingSyncUnitAssignments(): Result<List<IncidentUnitAssignment>>

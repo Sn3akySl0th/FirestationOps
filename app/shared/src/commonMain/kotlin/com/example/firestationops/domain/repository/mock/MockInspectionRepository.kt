@@ -57,6 +57,9 @@ class MockInspectionRepository : InspectionRepository {
         templates.value.find { it.id == id }?.let { Result.success(it) } 
             ?: Result.failure(Exception("Template not found"))
 
+    override suspend fun getInspection(id: String): Result<Inspection?> =
+        Result.success(inspections.value.find { it.id == id })
+
     override suspend fun saveInspection(inspection: Inspection): Result<Unit> {
         inspections.update { (it.filter { i -> i.id != inspection.id } + inspection) }
         return Result.success(Unit)

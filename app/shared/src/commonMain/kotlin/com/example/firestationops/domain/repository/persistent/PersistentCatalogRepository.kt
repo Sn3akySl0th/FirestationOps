@@ -12,6 +12,19 @@ class PersistentCatalogRepository(
     private val database: FirestationOpsDatabase,
     private val onCatalogUpdated: () -> Unit
 ) : CatalogRepository {
+    override suspend fun findDepartment(id: String): Department? = database.getDepartmentById(id)
+
+    override suspend fun findStation(id: String): Station? =
+        database.getAllStations().find { it.id == id }
+
+    override suspend fun findApparatus(id: String): Apparatus? =
+        database.getAllApparatus().find { it.id == id }
+
+    override suspend fun findTemplate(id: String): InspectionTemplate? =
+        database.getAllTemplates().find { it.id == id }
+
+    override suspend fun findMember(id: String): Member? = database.getMemberById(id)
+
     override suspend fun applyDepartment(department: Department): Result<Unit> = runCatching {
         database.insertDepartment(department)
     }
