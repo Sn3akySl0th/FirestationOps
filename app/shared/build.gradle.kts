@@ -99,6 +99,11 @@ kotlin {
             implementation(libs.gitlive.firebase.java.sdk)
             implementation(libs.kotlinx.coroutinesPlayServices)
         }
+        jvmTest.dependencies {
+            implementation(libs.sqldelight.sqlite.driver)
+            implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutinesTest)
+        }
     }
 }
 

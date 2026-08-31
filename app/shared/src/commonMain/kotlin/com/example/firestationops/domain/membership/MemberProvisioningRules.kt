@@ -8,9 +8,27 @@ object MemberProvisioningRules {
     private val emailPattern = Regex("""^[^\s@]+@[^\s@]+\.[^\s@]+$""")
 
     const val PENDING_MEMBER_ID_PREFIX = "pending-"
+
+    fun hasValidCanonicalRoles(roles: Set<Role>): Boolean = roles.isNotEmpty()
+
+    fun parseCanonicalRoles(rolesRaw: Any?): Set<Role>? {
+        if (rolesRaw !is List<*>) return null
+        if (rolesRaw.isEmpty()) return null
+        val roles = LinkedHashSet<Role>()
+        for (item in rolesRaw) {
+            val roleName = item as? String ?: return null
+            val role = runCatching { Role.valueOf(roleName) }.getOrElse { return null }
+            roles.add(role)
+        }
+        return roles
+    }
+
     fun validateMemberProfile(member: Member): String? {
         if (member.departmentId.isBlank()) {
             return "No department assigned to your account. Contact your department administrator."
+        }
+        if (!hasValidCanonicalRoles(member.roles)) {
+            return "Your member profile has invalid roles. Contact your department administrator."
         }
         if (!member.isActive) {
             return "Your account is inactive. Contact your department administrator."

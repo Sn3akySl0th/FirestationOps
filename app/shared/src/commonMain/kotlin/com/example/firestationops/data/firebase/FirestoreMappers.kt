@@ -1,5 +1,6 @@
 package com.example.firestationops.data.firebase
 
+import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.model.Apparatus
 import com.example.firestationops.domain.model.ApparatusStatus
 import com.example.firestationops.domain.model.Attachment
@@ -208,12 +209,12 @@ object FirestoreMappers {
 
     fun memberFromMap(id: String, data: Map<String, Any?>): Member? {
         val departmentId = data["departmentId"] as? String ?: return null
+        if (departmentId.isBlank()) return null
         val email = data["email"] as? String ?: return null
         val firstName = data["firstName"] as? String ?: return null
         val lastName = data["lastName"] as? String ?: return null
-        val roles = (data["roles"] as? List<*>)?.mapNotNull { roleName ->
-            (roleName as? String)?.let { runCatching { Role.valueOf(it) }.getOrNull() }
-        }?.toSet() ?: setOf(Role.MEMBER)
+        val isActive = data["isActive"] as? Boolean ?: return null
+        val roles = MemberProvisioningRules.parseCanonicalRoles(data["roles"]) ?: return null
         return Member(
             id = id,
             departmentId = departmentId,
@@ -221,8 +222,8 @@ object FirestoreMappers {
             firstName = firstName,
             lastName = lastName,
             memberNumber = data["memberNumber"] as? String,
-            roles = roles.ifEmpty { setOf(Role.MEMBER) },
-            isActive = data["isActive"] as? Boolean ?: true,
+            roles = roles,
+            isActive = isActive,
             createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,
             updatedAt = (data["updatedAt"] as? Number)?.toLong() ?: 0L
         )

@@ -18,13 +18,20 @@ service cloud.firestore {
       return get(canonicalMemberPath()).data;
     }
 
+    function hasValidCanonicalRoles() {
+      let roles = canonicalMember().roles;
+      return roles is list
+        && roles.size() > 0
+        && roles.hasOnly(['MEMBER', 'APPARATUS_OFFICER', 'OFFICER', 'ADMIN']);
+    }
+
     function hasValidActiveMembership() {
       return hasCanonicalMembership()
         && canonicalMember().id == request.auth.uid
         && canonicalMember().departmentId is string
         && canonicalMember().departmentId.size() > 0
         && canonicalMember().isActive == true
-        && canonicalMember().roles is list;
+        && hasValidCanonicalRoles();
     }
 
     function belongsToDepartment(departmentId) {

@@ -57,6 +57,32 @@ class MemberProvisioningRulesTest {
     }
 
     @Test
+    fun validateMemberProfile_rejectsEmptyRoles() {
+        val member = Member(
+            id = "uid-1",
+            departmentId = "dept-1",
+            email = "member@example.com",
+            firstName = "Alex",
+            lastName = "Rivera",
+            roles = emptySet()
+        )
+
+        assertEquals(
+            "Your member profile has invalid roles. Contact your department administrator.",
+            MemberProvisioningRules.validateMemberProfile(member)
+        )
+    }
+
+    @Test
+    fun parseCanonicalRoles_rejectsMalformedRoleLists() {
+        assertNull(MemberProvisioningRules.parseCanonicalRoles(emptyList<String>()))
+        assertNull(MemberProvisioningRules.parseCanonicalRoles(listOf("UNKNOWN")))
+        assertNull(MemberProvisioningRules.parseCanonicalRoles(listOf("ADMIN", "UNKNOWN")))
+        assertNull(MemberProvisioningRules.parseCanonicalRoles("ADMIN"))
+        assertNull(MemberProvisioningRules.parseCanonicalRoles(null))
+    }
+
+    @Test
     fun deduplicateMembersByEmail_prefersFirebaseMemberOverLocalPlaceholder() {
         val localPlaceholder = Member(
             id = "user-clefebvre-id",

@@ -4,7 +4,6 @@ import com.example.firestationops.db.FirestationOpsDatabase
 import com.example.firestationops.domain.auth.AuthSessionRecovery
 import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
 import com.example.firestationops.domain.bootstrap.DepartmentCatalogProfiles
-import com.example.firestationops.domain.membership.CalhounMembershipNormalizer
 import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.model.Member
 import com.example.firestationops.domain.model.UserState
@@ -41,7 +40,7 @@ class JvmFirebaseAuthRepository(
     private fun recoverFirebaseSession() {
         val firebaseUser = auth.currentUser
         if (firebaseUser != null) {
-            val cachedMember = database.getMemberById(firebaseUser.uid)?.let(CalhounMembershipNormalizer::normalize)
+            val cachedMember = database.getMemberById(firebaseUser.uid)
             if (cachedMember != null) {
                 _userState.value = AuthSessionRecovery.activateMember(database, cachedMember)
                 return

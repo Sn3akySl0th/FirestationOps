@@ -3,8 +3,10 @@ package com.example.firestationops.domain.membership
 import com.example.firestationops.domain.model.Member
 
 /**
- * Calhoun VFD uses fire department number [DEPARTMENT_NUMBER] for tenant scoping.
- * Firefighter badge numbers (200–225) must not be used as [Member.departmentId].
+ * Calhoun VFD legacy membership helpers.
+ *
+ * [normalize] is for trusted migration tooling and tests only. Production runtime code must not
+ * rewrite canonical membership [Member.departmentId] values.
  */
 object CalhounMembershipNormalizer {
     const val DEPARTMENT_NUMBER = "5"

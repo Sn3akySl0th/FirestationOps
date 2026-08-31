@@ -63,3 +63,13 @@ Run the emulator suite after normalization and before production deployment. Ret
 ## Token freshness
 
 Custom claims are server-managed convenience data, not the authoritative rules source. Claim changes appear on a newly issued ID token. Membership Functions revoke refresh tokens after role or active-state changes, but an already-issued ID token can remain present on a device until refresh. Canonical membership checks in Firestore and Storage rules make tenant changes and deactivation effective without waiting for claims to refresh. The affected user should still sign out and sign back in, or force an ID-token refresh, before relying on updated application-visible claims.
+
+## Claims synchronization failures
+
+Membership roster callables write canonical and nested Firestore records in a transaction before synchronizing custom claims and revoking refresh tokens. If claims synchronization or token revocation fails after the Firestore write:
+
+- **Provision:** the callable rolls back the created Auth user and both membership documents.
+- **Update or deactivation:** the callable rolls back the Firestore membership documents to the previous values and returns an `aborted` error with an explicit message. Retry the roster operation after resolving the Admin SDK failure, or reconcile claims manually through trusted server tooling and have affected users sign in again.
+- **Manual reconciliation:** use the `syncMemberClaims` callable or Admin SDK to set `departmentId`, `roles`, and `isActive` from the canonical `members/{uid}` record, then revoke refresh tokens when authority changed.
+
+Do not leave a successful roster UI state when claims synchronization failed; the callable response must remain unambiguous.

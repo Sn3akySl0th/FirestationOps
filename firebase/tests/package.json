@@ -6,7 +6,7 @@
   },
   "scripts": {
     "test": "node --test --test-concurrency=1 *.test.js",
-    "test:functions": "node --test --test-concurrency=1 membership-functions.test.js",
+    "test:functions": "node --test --test-concurrency=1 membership-functions.test.js membership-callable.test.js",
     "test:rules": "node --test --test-concurrency=1 firestore.rules.test.js storage.rules.test.js"
   },
   "devDependencies": {

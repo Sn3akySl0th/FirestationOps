@@ -47,7 +47,7 @@ function createMembershipService({ auth, firestore, logger, clock = () => Date.n
         );
       });
 
-      await synchronizeClaims(member);
+      await synchronizeMembershipAuthority(member, null);
       logger.info("department_member_provisioned", {
         actorUid,
         targetUid: createdUid,
@@ -135,11 +135,7 @@ function createMembershipService({ auth, firestore, logger, clock = () => Date.n
         }
       }
 
-      await synchronizeClaims(updatedMember);
-      if (membershipAuthorityChanged(previousMember, updatedMember)) {
-        await auth.revokeRefreshTokens(input.targetUserId);
-      }
-
+      await synchronizeMembershipAuthority(updatedMember, previousMember);
       logger.info("department_member_updated", {
         actorUid,
         targetUid: input.targetUserId,
@@ -200,8 +196,7 @@ function createMembershipService({ auth, firestore, logger, clock = () => Date.n
         );
       });
 
-      await synchronizeClaims(deactivatedMember);
-      await auth.revokeRefreshTokens(input.targetUserId);
+      await synchronizeMembershipAuthority(deactivatedMember, previousMember);
       logger.info("department_member_deactivated", {
         actorUid,
         targetUid: input.targetUserId,
@@ -256,6 +251,24 @@ function createMembershipService({ auth, firestore, logger, clock = () => Date.n
         return;
       }
       throw error;
+    }
+  }
+
+  async function synchronizeMembershipAuthority(member, previousMember) {
+    try {
+      await synchronizeClaims(member);
+      if (previousMember && membershipAuthorityChanged(previousMember, member)) {
+        await auth.revokeRefreshTokens(member.id);
+      }
+    } catch (error) {
+      if (previousMember) {
+        await restoreMemberPairIfUnchanged(previousMember, member);
+      }
+      throw new HttpsError(
+        "aborted",
+        "Membership was written to Firestore but claims synchronization failed. " +
+          "The membership change was rolled back. Retry the operation or reconcile claims manually.",
+      );
     }
   }
 
@@ -328,6 +341,7 @@ function createMembershipService({ auth, firestore, logger, clock = () => Date.n
     updateDepartmentMember,
     deactivateDepartmentMember,
     synchronizeClaims,
+    synchronizeMembershipAuthority,
   };
 }
 
@@ -339,6 +353,12 @@ function requireAuthenticatedUid(request) {
   return uid;
 }
 
+function hasValidCanonicalRoles(roles) {
+  return Array.isArray(roles) &&
+    roles.length > 0 &&
+    roles.every((role) => typeof role === "string" && ALLOWED_ROLES.has(role));
+}
+
 function requireActiveAdminSnapshot(snapshot, uid, expectedDepartmentId = null) {
   if (!snapshot.exists) {
     throw new HttpsError("permission-denied", "Active administrator membership required.");
@@ -348,7 +368,7 @@ function requireActiveAdminSnapshot(snapshot, uid, expectedDepartmentId = null) 
       typeof member.departmentId !== "string" ||
       member.departmentId.length === 0 ||
       member.isActive !== true ||
-      !Array.isArray(member.roles) ||
+      !hasValidCanonicalRoles(member.roles) ||
       !member.roles.includes("ADMIN") ||
       (expectedDepartmentId !== null && member.departmentId !== expectedDepartmentId)) {
     throw new HttpsError("permission-denied", "Active administrator membership required.");
@@ -490,7 +510,7 @@ function sanitizeMember(member) {
 
 function isActiveAdmin(member) {
   return member?.isActive === true &&
-    Array.isArray(member.roles) &&
+    hasValidCanonicalRoles(member.roles) &&
     member.roles.includes("ADMIN");
 }
 
@@ -528,5 +548,6 @@ function mapCallableError(error) {
 module.exports = {
   ALLOWED_ROLES,
   createMembershipService,
+  hasValidCanonicalRoles,
   membershipAuthorityChanged,
 };

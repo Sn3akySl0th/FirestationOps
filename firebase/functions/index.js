@@ -67,6 +67,19 @@ async function persistDepartmentClaims(localId) {
   return claims;
 }
 
+async function executeSyncMemberClaims(request) {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Sign in required.");
+  }
+
+  const claims = await persistDepartmentClaims(request.auth.uid);
+  return {
+    departmentId: claims?.departmentId ?? null,
+    roles: claims?.roles ?? [],
+    isActive: claims?.isActive ?? false,
+  };
+}
+
 const membershipService = createMembershipService({
   auth: admin.auth(),
   firestore: admin.firestore(),
@@ -99,18 +112,7 @@ exports.syncMemberClaims = onCall(
   {
     region: "us-central1",
   },
-  async (request) => {
-    if (!request.auth?.uid) {
-      throw new HttpsError("unauthenticated", "Sign in required.");
-    }
-
-    const claims = await persistDepartmentClaims(request.auth.uid);
-    return {
-      departmentId: claims?.departmentId ?? null,
-      roles: claims?.roles ?? [],
-      isActive: claims?.isActive ?? false,
-    };
-  },
+  executeSyncMemberClaims,
 );
 
 exports.provisionDepartmentMember = onCall(
@@ -127,3 +129,8 @@ exports.deactivateDepartmentMember = onCall(
   { region: "us-central1" },
   membershipService.deactivateDepartmentMember,
 );
+
+module.exports.__testHandlers = {
+  executeSyncMemberClaims,
+  persistDepartmentClaims,
+};

@@ -12,7 +12,7 @@ const { ref, uploadBytes } = require("firebase/storage");
 const projectId = process.env.GCLOUD_PROJECT || "demo-firestationops";
 let testEnv;
 
-function membership(uid, departmentId, isActive = true) {
+function membership(uid, departmentId, roles = ["MEMBER"], isActive = true) {
   return {
     id: uid,
     departmentId,
@@ -20,7 +20,7 @@ function membership(uid, departmentId, isActive = true) {
     firstName: "Test",
     lastName: "Member",
     memberNumber: null,
-    roles: ["MEMBER"],
+    roles,
     isActive,
     createdAt: 1,
     updatedAt: 1,
@@ -32,7 +32,7 @@ async function seedMemberships() {
     const db = context.firestore();
     await setDoc(doc(db, "members/member-alpha"), membership("member-alpha", "dept-alpha"));
     await setDoc(doc(db, "members/member-bravo"), membership("member-bravo", "dept-bravo"));
-    await setDoc(doc(db, "members/inactive-alpha"), membership("inactive-alpha", "dept-alpha", false));
+    await setDoc(doc(db, "members/inactive-alpha"), membership("inactive-alpha", "dept-alpha", ["MEMBER"], false));
   });
 }
 
@@ -115,5 +115,30 @@ describe("Storage department isolation", () => {
       1024,
       "image/jpeg",
     ));
+  });
+
+  test("malformed or invalid canonical roles are denied for storage uploads", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const invalidMemberships = [
+        ["empty-roles", "dept-alpha", [], true],
+        ["unknown-role", "dept-alpha", ["UNKNOWN"], true],
+        ["mixed-role", "dept-alpha", ["ADMIN", "UNKNOWN"], true],
+        ["scalar-role", "dept-alpha", "ADMIN", true],
+      ];
+      for (const [uid, departmentId, roles, isActive] of invalidMemberships) {
+        const data = membership(uid, departmentId, roles, isActive);
+        await setDoc(doc(db, `members/${uid}`), data);
+      }
+    });
+
+    for (const uid of ["empty-roles", "unknown-role", "mixed-role", "scalar-role"]) {
+      await assertFails(upload(
+        storageFor(uid),
+        "departments/dept-alpha/attachments/invalid-role.jpg",
+        1024,
+        "image/jpeg",
+      ));
+    }
   });
 });

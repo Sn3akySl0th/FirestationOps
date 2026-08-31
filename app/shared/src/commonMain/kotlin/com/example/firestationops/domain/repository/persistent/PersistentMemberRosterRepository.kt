@@ -2,7 +2,6 @@ package com.example.firestationops.domain.repository.persistent
 
 import com.example.firestationops.currentTimeMillis
 import com.example.firestationops.db.FirestationOpsDatabase
-import com.example.firestationops.domain.membership.CalhounMembershipNormalizer
 import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.membership.MemberRosterInput
 import com.example.firestationops.domain.model.Member
@@ -45,19 +44,17 @@ class PersistentMemberRosterRepository(
             !assignedMemberId.isNullOrBlank() -> assignedMemberId
             else -> "${MemberProvisioningRules.PENDING_MEMBER_ID_PREFIX}${randomUUID()}"
         }
-        val member = CalhounMembershipNormalizer.normalize(
-            Member(
-                id = memberId,
-                departmentId = actingMember.departmentId,
-                email = normalizedInput.email,
-                firstName = normalizedInput.firstName,
-                lastName = normalizedInput.lastName,
-                memberNumber = normalizedInput.memberNumber,
-                roles = normalizedInput.roles,
-                isActive = normalizedInput.isActive,
-                createdAt = existing?.createdAt ?: now,
-                updatedAt = now
-            )
+        val member = Member(
+            id = memberId,
+            departmentId = actingMember.departmentId,
+            email = normalizedInput.email,
+            firstName = normalizedInput.firstName,
+            lastName = normalizedInput.lastName,
+            memberNumber = normalizedInput.memberNumber,
+            roles = normalizedInput.roles,
+            isActive = normalizedInput.isActive,
+            createdAt = existing?.createdAt ?: now,
+            updatedAt = now
         )
 
         database.upsertCanonicalMember(member)

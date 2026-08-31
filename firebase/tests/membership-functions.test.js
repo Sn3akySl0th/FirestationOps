@@ -139,6 +139,50 @@ describe("membership callable service", () => {
       )),
       "invalid-argument",
     );
+    await rejectsWithCode(
+      service.provisionDepartmentMember(request(
+        "admin-alpha",
+        validProvision({ roles: [] }),
+      )),
+      "invalid-argument",
+    );
+    await rejectsWithCode(
+      service.provisionDepartmentMember(request(
+        "admin-alpha",
+        validProvision({ roles: ["ADMIN", "UNKNOWN"] }),
+      )),
+      "invalid-argument",
+    );
+  });
+
+  test("rejects actors with empty, unknown, mixed, or malformed canonical roles", async () => {
+    await createMember("empty-roles-admin", "dept-alpha", []);
+    await rejectsWithCode(
+      service.provisionDepartmentMember(request("empty-roles-admin", validProvision())),
+      "permission-denied",
+    );
+
+    await createMember("unknown-role-admin", "dept-alpha", ["UNKNOWN"]);
+    await rejectsWithCode(
+      service.provisionDepartmentMember(request("unknown-role-admin", validProvision())),
+      "permission-denied",
+    );
+
+    await createMember("mixed-role-admin", "dept-alpha", ["ADMIN", "UNKNOWN"]);
+    await rejectsWithCode(
+      service.provisionDepartmentMember(request("mixed-role-admin", validProvision())),
+      "permission-denied",
+    );
+
+    const malformed = memberDocument("malformed-admin", "dept-alpha", ["ADMIN"]);
+    malformed.roles = "ADMIN";
+    await auth.createUser({ uid: malformed.id, email: malformed.email, password: "Fictional123!" });
+    await firestore.doc(`members/${malformed.id}`).set(malformed);
+    await firestore.doc(`departments/dept-alpha/members/${malformed.id}`).set(malformed);
+    await rejectsWithCode(
+      service.provisionDepartmentMember(request("malformed-admin", validProvision())),
+      "permission-denied",
+    );
   });
 
   test("rejects duplicate email addresses", async () => {
@@ -208,5 +252,89 @@ describe("membership callable service", () => {
       })),
       "permission-denied",
     );
+  });
+
+  test("update synchronizes claims and revokes refresh tokens when authority changes", async () => {
+    await createMember("admin-alpha", "dept-alpha", ["ADMIN"]);
+    await createMember("member-alpha", "dept-alpha", ["MEMBER"]);
+    await createMember("admin-beta", "dept-alpha", ["ADMIN"]);
+
+    await service.updateDepartmentMember(request(
+      "admin-alpha",
+      validUpdate("member-alpha", {
+        email: "member-alpha@example.test",
+        roles: ["OFFICER"],
+      }),
+    ));
+
+    const user = await auth.getUser("member-alpha");
+    assert.equal(user.customClaims.departmentId, "dept-alpha");
+    assert.deepEqual(user.customClaims.roles, ["OFFICER"]);
+    assert.equal(user.customClaims.isActive, true);
+  });
+
+  test("deactivation synchronizes claims and clears active authority", async () => {
+    await createMember("admin-alpha", "dept-alpha", ["ADMIN"]);
+    await createMember("member-alpha", "dept-alpha", ["MEMBER"]);
+    await createMember("admin-beta", "dept-alpha", ["ADMIN"]);
+
+    await service.deactivateDepartmentMember(request("admin-alpha", {
+      targetUserId: "member-alpha",
+    }));
+
+    const user = await auth.getUser("member-alpha");
+    assert.equal(user.customClaims.isActive, false);
+    assert.deepEqual(user.customClaims.roles, ["MEMBER"]);
+  });
+
+  test("rolls back membership writes when claims synchronization fails after update", async () => {
+    await createMember("admin-alpha", "dept-alpha", ["ADMIN"]);
+    await createMember("member-alpha", "dept-alpha", ["MEMBER"]);
+    await createMember("admin-beta", "dept-alpha", ["ADMIN"]);
+
+    const failingService = createMembershipService({
+      auth: {
+        ...auth,
+        async getUser(uid) {
+          return auth.getUser(uid);
+        },
+        async setCustomUserClaims() {
+          throw Object.assign(new Error("claims sync failed"), { code: "auth/internal-error" });
+        },
+        async revokeRefreshTokens(uid) {
+          return auth.revokeRefreshTokens(uid);
+        },
+        async createUser(user) {
+          return auth.createUser(user);
+        },
+        async updateUser(uid, updates) {
+          return auth.updateUser(uid, updates);
+        },
+        async getUserByEmail(email) {
+          return auth.getUserByEmail(email);
+        },
+        async deleteUser(uid) {
+          return auth.deleteUser(uid);
+        },
+      },
+      firestore,
+      logger,
+      clock: () => 200,
+    });
+
+    await rejectsWithCode(
+      failingService.updateDepartmentMember(request(
+        "admin-alpha",
+        validUpdate("member-alpha", {
+          email: "member-alpha@example.test",
+          roles: ["OFFICER"],
+        }),
+      )),
+      "aborted",
+    );
+
+    const canonical = await firestore.doc("members/member-alpha").get();
+    assert.ok(canonical.exists);
+    assert.deepEqual(canonical.data().roles, ["MEMBER"]);
   });
 });

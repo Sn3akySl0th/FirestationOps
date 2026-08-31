@@ -350,22 +350,21 @@ class FirestationOpsDatabase(driver: SqlDriver) {
     }
 
     fun upsertCanonicalMember(member: Member) {
-        val normalized = com.example.firestationops.domain.membership.CalhounMembershipNormalizer.normalize(member)
         dbQueries.deleteMembersWithEmailExceptId(
-            email = normalized.email,
-            id = normalized.id
+            email = member.email,
+            id = member.id
         )
         dbQueries.insertMember(
-            id = normalized.id,
-            departmentId = normalized.departmentId,
-            email = normalized.email,
-            firstName = normalized.firstName,
-            lastName = normalized.lastName,
-            memberNumber = normalized.memberNumber,
-            rolesJson = Json.encodeToString(normalized.roles),
-            isActive = if (normalized.isActive) 1 else 0,
-            createdAt = normalized.createdAt,
-            updatedAt = normalized.updatedAt
+            id = member.id,
+            departmentId = member.departmentId,
+            email = member.email,
+            firstName = member.firstName,
+            lastName = member.lastName,
+            memberNumber = member.memberNumber,
+            rolesJson = Json.encodeToString(member.roles),
+            isActive = if (member.isActive) 1 else 0,
+            createdAt = member.createdAt,
+            updatedAt = member.updatedAt
         )
     }
 

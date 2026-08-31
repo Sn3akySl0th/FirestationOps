@@ -287,4 +287,32 @@ describe("Firestore department isolation", () => {
       },
     ));
   });
+
+  test("malformed or invalid canonical roles are denied", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const invalidMemberships = [
+        ["empty-roles", "dept-alpha", [], true],
+        ["unknown-role", "dept-alpha", ["UNKNOWN"], true],
+        ["mixed-role", "dept-alpha", ["ADMIN", "UNKNOWN"], true],
+        ["scalar-role", "dept-alpha", "ADMIN", true],
+      ];
+      for (const [uid, departmentId, roles, isActive] of invalidMemberships) {
+        const data = membership(uid, departmentId, roles, isActive);
+        await setDoc(doc(db, `members/${uid}`), data);
+        await setDoc(doc(db, `departments/${departmentId}/members/${uid}`), data);
+      }
+    });
+
+    for (const uid of ["empty-roles", "unknown-role", "mixed-role", "scalar-role"]) {
+      await assertFails(getDoc(doc(dbFor(uid), "departments/dept-alpha")));
+    }
+  });
+
+  test("valid canonical roles still authorize department access", async () => {
+    await assertSucceeds(getDoc(doc(dbFor("member-alpha"), "departments/dept-alpha")));
+    await assertSucceeds(getDoc(doc(dbFor("apparatus-alpha"), "departments/dept-alpha")));
+    await assertSucceeds(getDoc(doc(dbFor("officer-alpha"), "departments/dept-alpha")));
+    await assertSucceeds(getDoc(doc(dbFor("admin-alpha"), "departments/dept-alpha")));
+  });
 });

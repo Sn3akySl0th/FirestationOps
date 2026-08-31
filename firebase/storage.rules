@@ -6,12 +6,21 @@ service firebase.storage {
       return /databases/(default)/documents/members/$(request.auth.uid);
     }
 
+    function hasValidCanonicalRoles() {
+      let member = firestore.get(canonicalMemberPath()).data;
+      let roles = member.roles;
+      return roles is list
+        && roles.size() > 0
+        && roles.hasOnly(['MEMBER', 'APPARATUS_OFFICER', 'OFFICER', 'ADMIN']);
+    }
+
     function isActiveDepartmentMember(departmentId) {
       return request.auth != null
         && firestore.exists(canonicalMemberPath())
         && firestore.get(canonicalMemberPath()).data.id == request.auth.uid
         && firestore.get(canonicalMemberPath()).data.departmentId == departmentId
-        && firestore.get(canonicalMemberPath()).data.isActive == true;
+        && firestore.get(canonicalMemberPath()).data.isActive == true
+        && hasValidCanonicalRoles();
     }
 
     function isAllowedImageUpload() {
