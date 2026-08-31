@@ -113,8 +113,4 @@ dependencies {
     add("androidMainImplementation", libs.firebase.auth)
     add("androidMainImplementation", libs.firebase.firestore)
     add("androidMainImplementation", libs.firebase.storage)
-    add("jvmMainImplementation", platform(libs.firebase.bom))
-    add("jvmMainImplementation", libs.firebase.auth)
-    add("jvmMainImplementation", libs.firebase.firestore)
-    add("jvmMainImplementation", libs.firebase.storage)
 }
