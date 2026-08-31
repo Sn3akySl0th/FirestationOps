@@ -70,6 +70,7 @@ CREATE TABLE MemberEntity (
     email TEXT NOT NULL,
     firstName TEXT NOT NULL,
     lastName TEXT NOT NULL,
+    memberNumber TEXT,
     rolesJson TEXT NOT NULL,
     isActive INTEGER NOT NULL DEFAULT 1,
     createdAt INTEGER NOT NULL,
@@ -305,8 +306,11 @@ selectAllMembersByDepartment:
 SELECT * FROM MemberEntity WHERE departmentId = ?;
 
 insertMember:
-INSERT OR REPLACE INTO MemberEntity(id, departmentId, email, firstName, lastName, rolesJson, isActive, createdAt, updatedAt)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO MemberEntity(id, departmentId, email, firstName, lastName, memberNumber, rolesJson, isActive, createdAt, updatedAt)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteMembersWithEmailExceptId:
+DELETE FROM MemberEntity WHERE email = ? AND id != ?;
 
 -- Session Queries
 selectSession:

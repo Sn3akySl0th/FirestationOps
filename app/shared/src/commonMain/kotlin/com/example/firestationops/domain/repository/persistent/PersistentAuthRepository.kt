@@ -2,6 +2,7 @@ package com.example.firestationops.domain.repository.persistent
 
 import com.example.firestationops.db.FirestationOpsDatabase
 import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
+import com.example.firestationops.domain.bootstrap.DepartmentCatalogProfiles
 import com.example.firestationops.domain.model.*
 import com.example.firestationops.domain.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +36,18 @@ class PersistentAuthRepository(private val database: FirestationOpsDatabase) : A
                 database.insertDepartment(dept)
             }
 
+            val calhounDeptId = DepartmentCatalogProfiles.CALHOUN_DEPARTMENT_ID
+            if (database.getDepartmentById(calhounDeptId) == null) {
+                database.insertDepartment(
+                    Department(
+                        id = calhounDeptId,
+                        name = DepartmentCatalogProfiles.profileFor(calhounDeptId)!!.departmentName,
+                        createdAt = 0,
+                        updatedAt = 0
+                    )
+                )
+            }
+
             // Ensure Admin exists
             val adminEmail = "admin@example.com"
             if (database.getMemberByEmail(adminEmail) == null) {
@@ -56,10 +69,11 @@ class PersistentAuthRepository(private val database: FirestationOpsDatabase) : A
                 println("AuthRepository: Seeding user $yourEmail")
                 database.insertMember(Member(
                     id = "user-clefebvre-id",
-                    departmentId = deptId,
+                    departmentId = DepartmentCatalogProfiles.CALHOUN_DEPARTMENT_ID,
+                    memberNumber = "221",
                     email = yourEmail,
-                    firstName = "User",
-                    lastName = "C",
+                    firstName = "Chris",
+                    lastName = "Lefebvre",
                     roles = setOf(Role.ADMIN),
                     isActive = true
                 ))

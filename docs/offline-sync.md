@@ -19,14 +19,16 @@ FirestationOps is offline-first. Operational writes are saved locally first, the
 3. Draft inspections remain `LOCAL_ONLY` until submitted.
 4. The dashboard shows a pending-sync count.
 
-## Upload order
+## Sync order
 
-The Android sync worker uploads in dependency order:
+The Android sync worker downloads the department catalog first, then uploads pending operational records in dependency order:
 
 1. Attachments (files to Cloud Storage, metadata to Firestore)
 2. Finalized inspections
 3. Deficiencies
 4. Incidents, command-log entries, unit assignments, and personnel assignments
+
+Catalog download includes the department document, stations, apparatus, templates, and department member roster. Administrators can upload an initial catalog from **Department settings** when the cloud catalog is empty.
 
 Record IDs are reused as Firestore document IDs for idempotent retries.
 

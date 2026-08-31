@@ -1,24 +1,45 @@
 package com.example.firestationops.data.firebase
 
+import com.example.firestationops.domain.model.Apparatus
+import com.example.firestationops.domain.model.ApparatusStatus
 import com.example.firestationops.domain.model.Attachment
 import com.example.firestationops.domain.model.CommandLogEntry
 import com.example.firestationops.domain.model.Deficiency
 import com.example.firestationops.domain.model.DeficiencySeverity
 import com.example.firestationops.domain.model.DeficiencyStatus
+import com.example.firestationops.domain.model.Department
 import com.example.firestationops.domain.model.Incident
 import com.example.firestationops.domain.model.IncidentUnitAssignment
 import com.example.firestationops.domain.model.Inspection
 import com.example.firestationops.domain.model.InspectionResponse
+import com.example.firestationops.domain.model.InspectionTemplate
+import com.example.firestationops.domain.model.InspectionTemplateItem
 import com.example.firestationops.domain.model.Member
 import com.example.firestationops.domain.model.PersonnelAssignment
 import com.example.firestationops.domain.model.Role
+import com.example.firestationops.domain.model.Station
 import com.example.firestationops.domain.model.SyncStatus
 import com.example.firestationops.domain.sync.LegacyFirestoreIdNormalizer
+import com.example.firestationops.domain.membership.CalhounMembershipNormalizer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 internal object FirestorePaths {
     fun member(uid: String) = "members/$uid"
+
+    fun department(departmentId: String) = "departments/$departmentId"
+
+    fun departmentMember(departmentId: String, memberId: String) =
+        "departments/$departmentId/members/$memberId"
+
+    fun station(departmentId: String, stationId: String) =
+        "departments/$departmentId/stations/$stationId"
+
+    fun apparatus(departmentId: String, apparatusId: String) =
+        "departments/$departmentId/apparatus/$apparatusId"
+
+    fun template(departmentId: String, templateId: String) =
+        "departments/$departmentId/templates/$templateId"
 
     fun inspection(departmentId: String, id: String) =
         "departments/$departmentId/inspections/$id"
@@ -51,6 +72,7 @@ internal object FirestoreMappers {
     fun memberToMap(member: Member): Map<String, Any?> = mapOf(
         "id" to member.id,
         "departmentId" to member.departmentId,
+        "memberNumber" to member.memberNumber,
         "email" to member.email.lowercase(),
         "firstName" to member.firstName,
         "lastName" to member.lastName,
@@ -60,14 +82,139 @@ internal object FirestoreMappers {
         "updatedAt" to member.updatedAt
     )
 
-    fun memberFromMap(id: String, data: Map<String, Any?>): Member? {
+    fun departmentToMap(department: Department): Map<String, Any?> = mapOf(
+        "id" to department.id,
+        "name" to department.name,
+        "stationIds" to department.stationIds,
+        "createdAt" to department.createdAt,
+        "updatedAt" to department.updatedAt
+    )
+
+    fun departmentFromMap(id: String, data: Map<String, Any?>): Department? {
+        val name = data["name"] as? String ?: return null
+        return Department(
+            id = id,
+            name = name,
+            stationIds = (data["stationIds"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+            createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,
+            updatedAt = (data["updatedAt"] as? Number)?.toLong() ?: 0L
+        )
+    }
+
+    fun stationToMap(station: Station): Map<String, Any?> = mapOf(
+        "id" to station.id,
+        "departmentId" to station.departmentId,
+        "name" to station.name,
+        "address" to station.address,
+        "createdAt" to station.createdAt,
+        "updatedAt" to station.updatedAt
+    )
+
+    fun stationFromMap(id: String, data: Map<String, Any?>): Station? {
         val departmentId = data["departmentId"] as? String ?: return null
+        val name = data["name"] as? String ?: return null
+        return Station(
+            id = id,
+            departmentId = departmentId,
+            name = name,
+            address = data["address"] as? String,
+            createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,
+            updatedAt = (data["updatedAt"] as? Number)?.toLong() ?: 0L
+        )
+    }
+
+    fun apparatusToMap(apparatus: Apparatus): Map<String, Any?> = mapOf(
+        "id" to apparatus.id,
+        "departmentId" to apparatus.departmentId,
+        "stationId" to apparatus.stationId,
+        "name" to apparatus.name,
+        "type" to apparatus.type,
+        "radioName" to apparatus.radioName,
+        "status" to apparatus.status.name,
+        "year" to apparatus.year,
+        "make" to apparatus.make,
+        "model" to apparatus.model,
+        "vin" to apparatus.vin,
+        "licensePlate" to apparatus.licensePlate,
+        "createdAt" to apparatus.createdAt,
+        "updatedAt" to apparatus.updatedAt
+    )
+
+    fun apparatusFromMap(id: String, data: Map<String, Any?>): Apparatus? {
+        val departmentId = data["departmentId"] as? String ?: return null
+        val stationId = data["stationId"] as? String ?: return null
+        val name = data["name"] as? String ?: return null
+        val type = data["type"] as? String ?: return null
+        val radioName = data["radioName"] as? String ?: return null
+        val statusName = data["status"] as? String ?: ApparatusStatus.IN_SERVICE.name
+        return Apparatus(
+            id = id,
+            departmentId = departmentId,
+            stationId = LegacyFirestoreIdNormalizer.normalizeEntityId(departmentId, stationId),
+            name = name,
+            type = type,
+            radioName = radioName,
+            status = runCatching { ApparatusStatus.valueOf(statusName) }.getOrDefault(ApparatusStatus.IN_SERVICE),
+            year = (data["year"] as? Number)?.toInt(),
+            make = data["make"] as? String,
+            model = data["model"] as? String,
+            vin = data["vin"] as? String,
+            licensePlate = data["licensePlate"] as? String,
+            createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,
+            updatedAt = (data["updatedAt"] as? Number)?.toLong() ?: 0L
+        )
+    }
+
+    fun templateToMap(template: InspectionTemplate): Map<String, Any?> = mapOf(
+        "id" to template.id,
+        "departmentId" to template.departmentId,
+        "name" to template.name,
+        "description" to template.description,
+        "apparatusType" to template.apparatusType,
+        "version" to template.version,
+        "frequencyHours" to template.frequencyHours,
+        "isActive" to template.isActive,
+        "itemsJson" to json.encodeToString(template.items),
+        "createdAt" to template.createdAt,
+        "updatedAt" to template.updatedAt
+    )
+
+    fun templateFromMap(id: String, data: Map<String, Any?>): InspectionTemplate? {
+        val departmentId = data["departmentId"] as? String ?: return null
+        val name = data["name"] as? String ?: return null
+        val apparatusType = data["apparatusType"] as? String ?: return null
+        val itemsJson = data["itemsJson"] as? String ?: "[]"
+        val items = runCatching {
+            json.decodeFromString<List<InspectionTemplateItem>>(itemsJson)
+        }.getOrDefault(emptyList())
+        return InspectionTemplate(
+            id = id,
+            departmentId = departmentId,
+            name = name,
+            description = data["description"] as? String,
+            apparatusType = apparatusType,
+            version = (data["version"] as? Number)?.toInt() ?: 1,
+            frequencyHours = (data["frequencyHours"] as? Number)?.toInt() ?: 24,
+            isActive = data["isActive"] as? Boolean ?: true,
+            items = items,
+            createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,
+            updatedAt = (data["updatedAt"] as? Number)?.toLong() ?: 0L
+        )
+    }
+
+    fun memberFromMap(id: String, data: Map<String, Any?>): Member? {
+        val rawDepartmentId = data["departmentId"] as? String ?: return null
         val email = data["email"] as? String ?: return null
         val firstName = data["firstName"] as? String ?: return null
         val lastName = data["lastName"] as? String ?: return null
         val roles = (data["roles"] as? List<*>)?.mapNotNull { roleName ->
             (roleName as? String)?.let { runCatching { Role.valueOf(it) }.getOrNull() }
         }?.toSet() ?: setOf(Role.MEMBER)
+        val rawMemberNumber = data["memberNumber"] as? String
+        val (departmentId, memberNumber) = CalhounMembershipNormalizer.normalizeDepartmentAndMemberNumber(
+            departmentId = rawDepartmentId,
+            memberNumber = rawMemberNumber
+        )
 
         return Member(
             id = id,
@@ -75,6 +222,7 @@ internal object FirestoreMappers {
             email = email,
             firstName = firstName,
             lastName = lastName,
+            memberNumber = memberNumber,
             roles = roles.ifEmpty { setOf(Role.MEMBER) },
             isActive = data["isActive"] as? Boolean ?: true,
             createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,

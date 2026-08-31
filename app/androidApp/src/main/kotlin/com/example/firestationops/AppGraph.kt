@@ -3,11 +3,18 @@ package com.example.firestationops
 import android.content.Context
 import com.example.firestationops.data.firebase.FirebaseAuthRepository
 import com.example.firestationops.data.firebase.FirebaseAvailability
+import com.example.firestationops.data.firebase.FirebaseDepartmentCatalogBootstrap
 import com.example.firestationops.data.firebase.FirebaseSyncCoordinator
 import com.example.firestationops.db.DatabaseDriverFactory
 import com.example.firestationops.db.FirestationOpsDatabase
+import com.example.firestationops.domain.bootstrap.DepartmentCatalogBootstrap
+import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
+import com.example.firestationops.domain.bootstrap.DepartmentCatalogProfiles
+import com.example.firestationops.domain.bootstrap.NoOpDepartmentCatalogBootstrap
+import com.example.firestationops.domain.repository.ApparatusRepository
 import com.example.firestationops.domain.repository.AttachmentRepository
 import com.example.firestationops.domain.repository.AuthRepository
+import com.example.firestationops.domain.repository.CatalogRepository
 import com.example.firestationops.domain.repository.DeficiencyRepository
 import com.example.firestationops.domain.repository.DepartmentRepository
 import com.example.firestationops.domain.repository.IncidentRepository
@@ -15,11 +22,11 @@ import com.example.firestationops.domain.repository.InspectionRepository
 import com.example.firestationops.domain.repository.persistent.PersistentApparatusRepository
 import com.example.firestationops.domain.repository.persistent.PersistentAttachmentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentAuthRepository
+import com.example.firestationops.domain.repository.persistent.PersistentCatalogRepository
 import com.example.firestationops.domain.repository.persistent.PersistentDeficiencyRepository
 import com.example.firestationops.domain.repository.persistent.PersistentDepartmentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentIncidentRepository
 import com.example.firestationops.domain.repository.persistent.PersistentInspectionRepository
-import com.example.firestationops.domain.repository.ApparatusRepository
 import com.example.firestationops.domain.sync.NoOpSyncCoordinator
 import com.example.firestationops.domain.sync.SyncCoordinator
 
@@ -38,6 +45,20 @@ class AppGraph(context: Context) {
     private val localAuthRepository: PersistentAuthRepository = PersistentAuthRepository(database)
     val firebaseEnabled: Boolean = FirebaseAvailability.isConfigured(context)
 
+    val catalogRepository: CatalogRepository = PersistentCatalogRepository(database) {
+        (apparatusRepository as PersistentApparatusRepository).refreshCatalog()
+        (inspectionRepository as PersistentInspectionRepository).refreshCatalog()
+    }
+
+    val departmentCatalogBootstrap: DepartmentCatalogBootstrap = if (firebaseEnabled) {
+        FirebaseDepartmentCatalogBootstrap(
+            firebaseEnabled = true,
+            database = database
+        )
+    } else {
+        NoOpDepartmentCatalogBootstrap()
+    }
+
     val authRepository: AuthRepository = if (firebaseEnabled) {
         FirebaseAuthRepository(
             database = database,
@@ -51,6 +72,7 @@ class AppGraph(context: Context) {
     val syncCoordinator: SyncCoordinator = if (firebaseEnabled) {
         FirebaseSyncCoordinator(
             firebaseEnabled = true,
+            catalogRepository = catalogRepository,
             attachmentRepository = attachmentRepository,
             inspectionRepository = inspectionRepository,
             deficiencyRepository = deficiencyRepository,
@@ -61,7 +83,17 @@ class AppGraph(context: Context) {
     }
 
     fun prepareDepartment(departmentId: String) {
-        (apparatusRepository as PersistentApparatusRepository).ensureDepartmentData(departmentId)
-        (inspectionRepository as PersistentInspectionRepository).ensureDepartmentData(departmentId)
+        when {
+            DepartmentCatalogProfiles.profileFor(departmentId) != null -> {
+                DemoDepartmentSeeder.ensureDemoData(database, departmentId)
+            }
+            !firebaseEnabled -> {
+                (apparatusRepository as PersistentApparatusRepository).ensureDepartmentData(departmentId)
+                (inspectionRepository as PersistentInspectionRepository).ensureDepartmentData(departmentId)
+                return
+            }
+        }
+        (apparatusRepository as PersistentApparatusRepository).refreshCatalog()
+        (inspectionRepository as PersistentInspectionRepository).refreshCatalog()
     }
 }

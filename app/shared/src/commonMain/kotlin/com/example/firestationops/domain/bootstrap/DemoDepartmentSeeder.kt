@@ -19,6 +19,17 @@ object DemoDepartmentSeeder {
     const val APPARATUS_ENGINE_2 = "ap-engine-2"
     const val APPARATUS_RESCUE_1 = "ap-rescue-1"
 
+    fun defaultCanonicalIds(): List<String> = listOf(
+        TEMPLATE_ENGINE,
+        TEMPLATE_LADDER,
+        STATION_1,
+        STATION_2,
+        APPARATUS_ENGINE_1,
+        APPARATUS_LADDER_1,
+        APPARATUS_ENGINE_2,
+        APPARATUS_RESCUE_1
+    )
+
     private val demoTemplateIds = listOf(TEMPLATE_ENGINE, TEMPLATE_LADDER)
     private val demoStationIds = listOf(STATION_1, STATION_2)
     private val demoApparatusIds = listOf(
@@ -31,14 +42,78 @@ object DemoDepartmentSeeder {
     fun ensureDemoData(database: FirestationOpsDatabase, departmentId: String) {
         if (departmentId.isBlank()) return
 
-        ensureDepartmentRecord(database, departmentId)
         removeLegacyPrefixedDemoCatalog(database, departmentId)
 
-        if (!hasDemoCatalog(database)) {
-            seedTemplates(database, departmentId)
-            seedStationsAndApparatus(database, departmentId)
+        val profile = DepartmentCatalogProfiles.profileFor(departmentId)
+        if (profile != null) {
+            applyProfile(database, departmentId, profile)
+            return
+        }
+
+        ensureDepartmentRecord(database, departmentId, "Department $departmentId")
+
+        if (!hasDefaultDemoCatalog(database)) {
+            seedDefaultTemplates(database, departmentId)
+            seedDefaultStationsAndApparatus(database, departmentId)
         } else {
-            reassignDemoCatalogToDepartment(database, departmentId)
+            reassignDefaultDemoCatalogToDepartment(database, departmentId)
+        }
+    }
+
+    private fun applyProfile(
+        database: FirestationOpsDatabase,
+        departmentId: String,
+        profile: DepartmentCatalogProfile
+    ) {
+        val now = currentTimeMillis()
+        database.insertDepartment(
+            Department(
+                id = departmentId,
+                name = profile.departmentName,
+                stationIds = profile.stationIds,
+                createdAt = now,
+                updatedAt = now
+            )
+        )
+
+        profile.templates.forEach { templateDefinition ->
+            database.insertTemplate(profile.toTemplate(departmentId, templateDefinition))
+        }
+        profile.stations.forEach { stationDefinition ->
+            database.insertStation(profile.toStation(departmentId, stationDefinition))
+        }
+        profile.apparatus.forEach { apparatusDefinition ->
+            database.insertApparatus(profile.toApparatus(departmentId, apparatusDefinition))
+        }
+
+        retireReplacedCatalogEntities(database, profile)
+    }
+
+    private fun retireReplacedCatalogEntities(
+        database: FirestationOpsDatabase,
+        profile: DepartmentCatalogProfile
+    ) {
+        val primaryEngineId = profile.apparatus.firstOrNull { it.type == "Engine" }?.id
+        val replacements = mapOf(
+            APPARATUS_ENGINE_1 to (primaryEngineId ?: profile.apparatusIds.firstOrNull()),
+            APPARATUS_ENGINE_2 to primaryEngineId,
+            APPARATUS_LADDER_1 to primaryEngineId,
+            APPARATUS_RESCUE_1 to primaryEngineId
+        )
+
+        replacements.forEach { (oldId, newId) ->
+            if (newId == null || oldId == newId) return@forEach
+            database.updateInspectionApparatusId(newId, oldId)
+            database.updateDeficiencyApparatusId(newId, oldId)
+            database.updateUnitAssignmentApparatusId(newId, oldId)
+        }
+
+        profile.retiredCanonicalIds.forEach { retiredId ->
+            when (retiredId) {
+                in demoTemplateIds -> database.deleteTemplateById(retiredId)
+                in demoApparatusIds -> database.deleteApparatusById(retiredId)
+                in demoStationIds -> database.deleteStationById(retiredId)
+            }
         }
     }
 
@@ -71,30 +146,35 @@ object DemoDepartmentSeeder {
         }
     }
 
-    private fun ensureDepartmentRecord(database: FirestationOpsDatabase, departmentId: String) {
-        if (database.getDepartmentById(departmentId) != null) return
-
+    private fun ensureDepartmentRecord(
+        database: FirestationOpsDatabase,
+        departmentId: String,
+        departmentName: String
+    ) {
+        val existing = database.getDepartmentById(departmentId)
         val now = currentTimeMillis()
         database.insertDepartment(
             Department(
                 id = departmentId,
-                name = "Department $departmentId",
-                createdAt = now,
+                name = departmentName,
+                stationIds = existing?.stationIds ?: emptyList(),
+                createdAt = existing?.createdAt ?: now,
                 updatedAt = now
             )
         )
     }
 
-    private fun hasDemoCatalog(database: FirestationOpsDatabase): Boolean =
+    private fun hasDefaultDemoCatalog(database: FirestationOpsDatabase): Boolean =
         database.getAllTemplates().any { it.id == TEMPLATE_ENGINE }
 
-    private fun reassignDemoCatalogToDepartment(database: FirestationOpsDatabase, departmentId: String) {
+    private fun reassignDefaultDemoCatalogToDepartment(database: FirestationOpsDatabase, departmentId: String) {
         demoTemplateIds.forEach { database.updateTemplateDepartmentId(it, departmentId) }
         demoStationIds.forEach { database.updateStationDepartmentId(it, departmentId) }
         demoApparatusIds.forEach { database.updateApparatusDepartmentId(it, departmentId) }
+        ensureDepartmentRecord(database, departmentId, "Department $departmentId")
     }
 
-    private fun seedTemplates(database: FirestationOpsDatabase, departmentId: String) {
+    private fun seedDefaultTemplates(database: FirestationOpsDatabase, departmentId: String) {
         database.insertTemplate(
             InspectionTemplate(
                 id = TEMPLATE_ENGINE,
@@ -127,7 +207,7 @@ object DemoDepartmentSeeder {
         )
     }
 
-    private fun seedStationsAndApparatus(database: FirestationOpsDatabase, departmentId: String) {
+    private fun seedDefaultStationsAndApparatus(database: FirestationOpsDatabase, departmentId: String) {
         database.insertStation(
             Station(
                 id = STATION_1,

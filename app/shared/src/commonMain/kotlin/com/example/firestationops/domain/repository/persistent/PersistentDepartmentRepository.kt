@@ -1,6 +1,7 @@
 package com.example.firestationops.domain.repository.persistent
 
 import com.example.firestationops.db.FirestationOpsDatabase
+import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.model.Department
 import com.example.firestationops.domain.model.Member
 import com.example.firestationops.domain.repository.DepartmentRepository
@@ -15,5 +16,9 @@ class PersistentDepartmentRepository(private val database: FirestationOpsDatabas
             ?: Result.failure(Exception("Member not found"))
 
     override suspend fun getMembersByDepartment(departmentId: String): Result<List<Member>> =
-        Result.success(database.getAllMembersByDepartment(departmentId))
+        Result.success(
+            MemberProvisioningRules.deduplicateMembersByEmail(
+                database.getAllMembersByDepartment(departmentId)
+            )
+        )
 }

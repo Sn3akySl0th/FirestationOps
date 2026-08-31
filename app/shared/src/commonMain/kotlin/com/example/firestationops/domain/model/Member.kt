@@ -9,6 +9,7 @@ data class Member(
     val email: String,
     val firstName: String,
     val lastName: String,
+    val memberNumber: String? = null,
     val roles: Set<Role> = setOf(Role.MEMBER),
     val isActive: Boolean = true,
     val createdAt: Long = 0,

@@ -27,6 +27,10 @@ class PersistentApparatusRepository(private val database: FirestationOpsDatabase
 
     fun ensureDepartmentData(departmentId: String) {
         DemoDepartmentSeeder.ensureDemoData(database, departmentId)
+        refreshCatalog()
+    }
+
+    fun refreshCatalog() {
         refresh()
     }
 
