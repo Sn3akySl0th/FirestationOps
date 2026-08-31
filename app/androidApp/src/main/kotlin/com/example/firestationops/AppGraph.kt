@@ -88,6 +88,7 @@ class AppGraph(context: Context) {
 
     val syncCoordinator: SyncCoordinator = if (firebaseEnabled) {
         FirebaseSyncCoordinator(
+            context = context,
             firebaseEnabled = true,
             catalogRepository = catalogRepository,
             attachmentRepository = attachmentRepository,

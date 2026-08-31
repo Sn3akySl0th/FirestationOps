@@ -376,7 +376,7 @@ selectCommandLogEntriesByIncident:
 SELECT * FROM CommandLogEntryEntity WHERE incidentId = ? ORDER BY createdAt ASC;
 
 insertCommandLogEntry:
-INSERT INTO CommandLogEntryEntity(
+INSERT OR REPLACE INTO CommandLogEntryEntity(
     id, incidentId, departmentId, message, entryType, createdAt, createdByUserId,
     incidentTimestamp, correctsEntryId, syncStatus
 )

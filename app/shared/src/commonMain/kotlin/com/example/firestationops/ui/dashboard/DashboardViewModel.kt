@@ -19,6 +19,7 @@ import com.example.firestationops.domain.repository.DeficiencyRepository
 import com.example.firestationops.domain.repository.IncidentRepository
 import com.example.firestationops.domain.repository.InspectionRepository
 import com.example.firestationops.domain.sync.SyncCoordinator
+import com.example.firestationops.domain.sync.SyncMessageFormatter
 import com.example.firestationops.domain.sync.SyncRunnerState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -87,18 +88,7 @@ class DashboardViewModel(
         viewModelScope.launch {
             _syncMessage.value = null
             val result = syncCoordinator.syncDepartment(departmentId)
-            _syncMessage.value = when {
-                result.isSuccess && result.uploadedCount > 0 && result.downloadedCount > 0 ->
-                    "Downloaded ${result.downloadedCount} and uploaded ${result.uploadedCount} record(s)."
-                result.isSuccess && result.uploadedCount > 0 ->
-                    "Synced ${result.uploadedCount} record(s) to the cloud."
-                result.isSuccess && result.downloadedCount > 0 ->
-                    "Downloaded ${result.downloadedCount} record(s) from the cloud."
-                result.isSuccess ->
-                    "Everything is already up to date."
-                else ->
-                    result.errors.firstOrNull() ?: "Sync failed."
-            }
+            _syncMessage.value = SyncMessageFormatter.format(result)
         }
     }
 
