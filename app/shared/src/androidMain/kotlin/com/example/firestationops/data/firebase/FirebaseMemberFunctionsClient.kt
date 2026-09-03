@@ -1,27 +1,33 @@
 package com.example.firestationops.data.firebase
 
 import com.example.firestationops.domain.membership.MemberRosterInput
+import com.example.firestationops.domain.membership.MemberRosterWrite
 import com.example.firestationops.domain.model.Member
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.FirebaseFunctionsException
 import kotlinx.coroutines.tasks.await
 
 interface FirebaseMemberFunctionsGateway {
-    suspend fun provisionMember(input: MemberRosterInput): Member
+    suspend fun provisionMember(input: MemberRosterInput): MemberRosterWrite
     suspend fun updateMember(memberId: String, input: MemberRosterInput): Member
     suspend fun deactivateMember(memberId: String): Member
+    suspend fun sendPasswordReset(memberId: String)
 }
 
 class FirebaseMemberFunctionsClient(
     private val functions: FirebaseFunctions = FirebaseFunctions.getInstance("us-central1")
 ) : FirebaseMemberFunctionsGateway {
-    override suspend fun provisionMember(input: MemberRosterInput): Member {
-        val password = input.initialPassword
-            ?: throw IllegalArgumentException("An initial password is required.")
-        return callForMember(
-            functionName = "provisionDepartmentMember",
-            data = memberData(input) + ("password" to password)
-        )
+    override suspend fun provisionMember(input: MemberRosterInput): MemberRosterWrite {
+        val data = buildMap<String, Any?> {
+            putAll(memberData(input))
+            input.initialPassword?.takeIf { it.isNotEmpty() }?.let { put("password", it) }
+        }
+        val resultMap = call(functionName = "provisionDepartmentMember", data = data)
+        val memberMap = resultMap["member"] as? Map<*, *>
+            ?: error("Member service did not return a member profile.")
+        val member = parseMember(memberMap)
+        val passwordSetupEmailSent = resultMap["passwordResetEmailSent"] as? Boolean
+        return MemberRosterWrite(member = member, passwordSetupEmailSent = passwordSetupEmailSent)
     }
 
     override suspend fun updateMember(memberId: String, input: MemberRosterInput): Member =
@@ -36,16 +42,31 @@ class FirebaseMemberFunctionsClient(
             data = mapOf("targetUserId" to memberId)
         )
 
+    override suspend fun sendPasswordReset(memberId: String) {
+        call(
+            functionName = "sendDepartmentMemberPasswordReset",
+            data = mapOf("targetUserId" to memberId)
+        )
+    }
+
     private suspend fun callForMember(functionName: String, data: Map<String, Any?>): Member {
+        val resultMap = call(functionName, data)
+        val memberMap = resultMap["member"] as? Map<*, *>
+            ?: error("Member service did not return a member profile.")
+        return parseMember(memberMap)
+    }
+
+    private suspend fun call(functionName: String, data: Map<String, Any?>): Map<*, *> {
         val result = try {
             functions.getHttpsCallable(functionName).call(data).await()
         } catch (error: FirebaseFunctionsException) {
             throw mapFunctionError(error)
         }
-        val resultMap = result.data as? Map<*, *>
+        return result.data as? Map<*, *>
             ?: error("Member service returned an invalid response.")
-        val memberMap = resultMap["member"] as? Map<*, *>
-            ?: error("Member service did not return a member profile.")
+    }
+
+    private fun parseMember(memberMap: Map<*, *>): Member {
         val stringKeyedMap = memberMap.entries.associate { entry ->
             val key = entry.key as? String
                 ?: error("Member service returned an invalid profile.")

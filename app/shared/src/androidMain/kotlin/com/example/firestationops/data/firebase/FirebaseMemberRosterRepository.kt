@@ -1,8 +1,10 @@
 package com.example.firestationops.data.firebase
 
 import com.example.firestationops.db.FirestationOpsDatabase
+import com.example.firestationops.domain.auth.PasswordResetRules
 import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.membership.MemberRosterInput
+import com.example.firestationops.domain.membership.MemberRosterWrite
 import com.example.firestationops.domain.model.Member
 import com.example.firestationops.domain.repository.MemberRosterAvailability
 import com.example.firestationops.domain.repository.MemberRosterRepository
@@ -18,13 +20,14 @@ class FirebaseMemberRosterRepository(
         input: MemberRosterInput,
         editingMemberId: String?,
         assignedMemberId: String?
-    ): Result<Member> = runCatching {
+    ): Result<MemberRosterWrite> = runCatching {
         MemberProvisioningRules.requireAdmin(actingMember)?.let { error(it) }
         val normalizedInput = input.copy(
             email = MemberProvisioningRules.normalizeEmail(input.email),
             firstName = input.firstName.trim(),
             lastName = input.lastName.trim(),
-            memberNumber = input.memberNumber?.trim()?.takeIf(String::isNotEmpty)
+            memberNumber = input.memberNumber?.trim()?.takeIf(String::isNotEmpty),
+            initialPassword = input.initialPassword?.takeIf { it.isNotEmpty() }
         )
         MemberProvisioningRules.validateRosterInput(
             input = normalizedInput,
@@ -33,17 +36,21 @@ class FirebaseMemberRosterRepository(
             editingMemberId = editingMemberId
         )?.let { error(it) }
 
-        val member = if (editingMemberId == null) {
+        val write = if (editingMemberId == null) {
             MemberProvisioningRules.validateInitialPassword(normalizedInput.initialPassword)?.let { error(it) }
             functionsClient.provisionMember(normalizedInput)
         } else {
-            functionsClient.updateMember(editingMemberId, normalizedInput.copy(initialPassword = null))
+            val member = functionsClient.updateMember(
+                editingMemberId,
+                normalizedInput.copy(initialPassword = null)
+            )
+            MemberRosterWrite(member = member)
         }
-        require(member.departmentId == actingMember.departmentId) {
+        require(write.member.departmentId == actingMember.departmentId) {
             "Member service returned a profile for another department."
         }
-        database.upsertCanonicalMember(member)
-        member
+        database.upsertCanonicalMember(write.member)
+        write
     }
 
     override suspend fun setMemberActive(
@@ -77,5 +84,21 @@ class FirebaseMemberRosterRepository(
         }
         database.upsertCanonicalMember(member)
         member
+    }
+
+    override suspend fun sendPasswordReset(
+        actingMember: Member,
+        memberId: String
+    ): Result<Unit> = runCatching {
+        MemberProvisioningRules.requireAdmin(actingMember)?.let { error(it) }
+        val existing = database.getMemberById(memberId) ?: error("Member not found.")
+        require(existing.departmentId == actingMember.departmentId) {
+            "Member is not in your department."
+        }
+        if (!existing.isActive) {
+            error("Password reset is only available for active members.")
+        }
+        PasswordResetRules.validateEmail(existing.email)?.let { error(it) }
+        functionsClient.sendPasswordReset(memberId)
     }
 }

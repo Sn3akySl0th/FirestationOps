@@ -24,6 +24,7 @@ data class Apparatus(
     val model: String? = null,
     val vin: String? = null,
     val licensePlate: String? = null,
+    val barcode: String? = null,
     val createdAt: Long = 0,
     val updatedAt: Long = 0
 )

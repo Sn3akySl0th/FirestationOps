@@ -84,7 +84,33 @@ const membershipService = createMembershipService({
   auth: admin.auth(),
   firestore: admin.firestore(),
   logger,
+  sendPasswordResetEmail: sendPasswordResetEmailWithIdentityToolkit,
 });
+
+async function sendPasswordResetEmailWithIdentityToolkit(email) {
+  const apiKey = identityToolkitApiKey.value();
+  if (!apiKey) {
+    throw new Error("IDENTITY_TOOLKIT_API_KEY is not configured.");
+  }
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requestType: "PASSWORD_RESET",
+        email,
+      }),
+    },
+  );
+  const body = await response.json();
+  if (!response.ok) {
+    const message = body?.error?.message || "Unable to send password reset email.";
+    const error = new Error(message);
+    error.code = message;
+    throw error;
+  }
+}
 
 exports.issueCustomToken = onCall(
   {
@@ -116,7 +142,10 @@ exports.syncMemberClaims = onCall(
 );
 
 exports.provisionDepartmentMember = onCall(
-  { region: "us-central1" },
+  {
+    region: "us-central1",
+    secrets: [identityToolkitApiKey],
+  },
   membershipService.provisionDepartmentMember,
 );
 
@@ -128,6 +157,14 @@ exports.updateDepartmentMember = onCall(
 exports.deactivateDepartmentMember = onCall(
   { region: "us-central1" },
   membershipService.deactivateDepartmentMember,
+);
+
+exports.sendDepartmentMemberPasswordReset = onCall(
+  {
+    region: "us-central1",
+    secrets: [identityToolkitApiKey],
+  },
+  membershipService.sendDepartmentMemberPasswordReset,
 );
 
 module.exports.__testHandlers = {

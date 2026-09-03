@@ -10,11 +10,14 @@ import com.example.firestationops.domain.model.Member
  */
 object CalhounMembershipNormalizer {
     const val DEPARTMENT_NUMBER = "5"
-    val MEMBER_NUMBER_RANGE = 200..225
+    val MEMBER_NUMBER_RANGE = 500..599
+
+    /** Badge numbers briefly stored as [Member.departmentId] during early migrations. */
+    private val LEGACY_BADGE_USED_AS_DEPARTMENT_ID_RANGE = 200..225
 
     fun normalize(member: Member): Member {
         val parsed = member.departmentId.toIntOrNull() ?: return member
-        if (parsed !in MEMBER_NUMBER_RANGE) return member
+        if (parsed !in LEGACY_BADGE_USED_AS_DEPARTMENT_ID_RANGE) return member
 
         return member.copy(
             departmentId = DEPARTMENT_NUMBER,
@@ -27,7 +30,7 @@ object CalhounMembershipNormalizer {
         memberNumber: String?
     ): Pair<String, String?> {
         val parsed = departmentId.toIntOrNull()
-        if (parsed != null && parsed in MEMBER_NUMBER_RANGE) {
+        if (parsed != null && parsed in LEGACY_BADGE_USED_AS_DEPARTMENT_ID_RANGE) {
             return DEPARTMENT_NUMBER to (memberNumber ?: departmentId)
         }
         return departmentId to memberNumber
@@ -35,6 +38,6 @@ object CalhounMembershipNormalizer {
 
     fun isLegacyMemberNumberUsedAsDepartmentId(departmentId: String): Boolean {
         val parsed = departmentId.toIntOrNull() ?: return false
-        return parsed in MEMBER_NUMBER_RANGE
+        return parsed in LEGACY_BADGE_USED_AS_DEPARTMENT_ID_RANGE
     }
 }

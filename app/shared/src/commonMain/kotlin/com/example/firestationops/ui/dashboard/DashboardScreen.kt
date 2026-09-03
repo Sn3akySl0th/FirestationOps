@@ -12,11 +12,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.firestationops.domain.apparatus.ApparatusTagMatcher
 import com.example.firestationops.domain.model.Apparatus
 import com.example.firestationops.domain.model.ApparatusInspectionStatus
 import com.example.firestationops.domain.model.ApparatusStatus
@@ -29,6 +31,7 @@ import com.example.firestationops.domain.sync.SyncQueueState
 import com.example.firestationops.domain.sync.SyncRunnerState
 import com.example.firestationops.ui.deficiency.DeficiencyItem
 import com.example.firestationops.ui.deficiency.DeficiencyWithApparatus
+import kotlinx.coroutines.launch
 
 @Composable
 fun DashboardScreen(
@@ -105,6 +108,8 @@ private fun DashboardContent(
     onRetryAllFailedAttachments: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+    val scannerScope = rememberCoroutineScope()
+    var scannerOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(syncMessage) {
         syncMessage?.let { message ->
@@ -114,7 +119,14 @@ private fun DashboardContent(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { scannerOpen = true }
+            ) {
+                Text("Scan apparatus")
+            }
+        }
     ) { padding ->
         BoxWithConstraints(
             modifier = Modifier
@@ -182,6 +194,28 @@ private fun DashboardContent(
             }
         }
         }
+    }
+
+    if (scannerOpen) {
+        val apparatusList = state.stations.flatMap { section ->
+            section.apparatus.map { item -> item.apparatus }
+        }
+        ApparatusScannerDialog(
+            onDismiss = { scannerOpen = false },
+            onTagSubmitted = { rawTag ->
+                val match = ApparatusTagMatcher.match(rawTag, apparatusList)
+                if (match != null) {
+                    scannerOpen = false
+                    onApparatusClick(match.id)
+                } else {
+                    scannerScope.launch {
+                        snackbarHostState.showSnackbar(
+                            "No apparatus matches that tag. Ask an administrator to assign the barcode in Catalog settings."
+                        )
+                    }
+                }
+            }
+        )
     }
 }
 

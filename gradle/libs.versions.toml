@@ -1,5 +1,5 @@
 [versions]
-agp = "9.3.2"
+agp = "9.4.0"
 android-compileSdk = "37"
 android-minSdk = "24"
 android-targetSdk = "37"
@@ -25,6 +25,8 @@ google-services = "4.4.2"
 work = "2.10.0"
 gitlive-firebase = "2.6.0"
 gitlive-firebase-java = "0.6.3"
+camerax = "1.4.1"
+mlkit-barcode-scanning = "17.3.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -68,6 +70,11 @@ gitlive-firebase-auth = { module = "dev.gitlive:firebase-auth", version.ref = "g
 gitlive-firebase-firestore = { module = "dev.gitlive:firebase-firestore", version.ref = "gitlive-firebase" }
 gitlive-firebase-storage = { module = "dev.gitlive:firebase-storage", version.ref = "gitlive-firebase" }
 gitlive-firebase-java-sdk = { module = "dev.gitlive:firebase-java-sdk", version.ref = "gitlive-firebase-java" }
+androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkit-barcode-scanning" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

@@ -41,4 +41,6 @@ class MockAuthRepository : AuthRepository {
         _userState.value = UserState.Unauthenticated
         return Result.success(Unit)
     }
+
+    override suspend fun requestPasswordReset(email: String): Result<Unit> = Result.success(Unit)
 }

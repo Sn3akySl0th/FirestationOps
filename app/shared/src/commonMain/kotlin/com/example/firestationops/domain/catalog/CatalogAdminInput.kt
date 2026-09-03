@@ -12,7 +12,10 @@ data class ApparatusCatalogInput(
     val name: String,
     val type: String,
     val radioName: String,
-    val status: ApparatusStatus = ApparatusStatus.IN_SERVICE
+    val status: ApparatusStatus = ApparatusStatus.IN_SERVICE,
+    val vin: String? = null,
+    val licensePlate: String? = null,
+    val barcode: String? = null
 )
 
 data class TemplateItemCatalogInput(

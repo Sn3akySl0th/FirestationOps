@@ -48,7 +48,7 @@ Each signed-in user must have a profile document:
 ```
 members/{firebaseUid}
   departmentId: "5"           # fire department number (tenant)
-  memberNumber: "221"         # firefighter badge number (200-225)
+  memberNumber: "521"         # firefighter badge number (500-599)
   email: "member@example.com"
   firstName: "Chris"
   lastName: "Lefebvre"
@@ -62,10 +62,13 @@ Administrators add members from **Department settings** on the officer dashboard
 
 1. Open **Department settings** from the dashboard (officers and admins).
 2. Tap **Add member** (admins only).
-3. Enter email, name, optional badge number, roles, and an **initial password** (at least 6 characters).
-4. Save. Android calls `provisionDepartmentMember`; the callable Function verifies the acting administrator, creates the Authentication account, and atomically creates the canonical and nested roster records.
+3. Enter email, name, optional badge number, and roles. Do not set an initial password.
+4. Save. Android calls `provisionDepartmentMember`; the callable Function verifies the acting administrator, creates the Authentication account with a random unguessable password, atomically creates the canonical and nested roster records, and emails a password-setup link.
+5. If the email does not arrive, open the member and tap **Send password reset**.
 
-The client does not create Firebase Authentication accounts or membership documents directly. It does not save the new member locally until the callable Function succeeds, and it clears the submitted password from UI state.
+Members reset their own password from the login screen (**Forgot password**) or, while signed in, **Reset password**. The client never displays or stores an administrator-chosen password.
+
+The client does not create Firebase Authentication accounts or membership documents directly. It does not save the new member locally until the callable Function succeeds.
 
 For roster-only entries without app sign-in, use local development mode (without `google-services.json`).
 
@@ -198,7 +201,26 @@ When SDK sign-in times out, the app can call a Cloud Function that verifies cred
    npx -y firebase-tools@latest deploy --only functions:issueCustomToken
    ```
 
-3. Rebuild/install the Android app and try **Login** again.
+3. Grant the Cloud Functions runtime service account permission to mint custom tokens.
+   Without this, `issueCustomToken` fails with `iam.serviceAccounts.signBlob` denied and online login falls back to the flaky device SDK path.
+
+   In [Google Cloud IAM](https://console.cloud.google.com/iam-admin/iam?project=firestationops), find
+   `619051286139-compute@developer.gserviceaccount.com` (or your project's
+   `PROJECT_NUMBER-compute@developer.gserviceaccount.com`) and add role
+   **Service Account Token Creator** on that same service account.
+
+   Or with Google Cloud CLI:
+
+   ```bash
+   PROJECT_NUMBER=619051286139
+   SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+   gcloud iam service-accounts add-iam-policy-binding "$SA" \
+     --member="serviceAccount:${SA}" \
+     --role="roles/iam.serviceAccountTokenCreator" \
+     --project=firestationops
+   ```
+
+4. Rebuild/install the Android app and try **Login** again.
 
 ### Offline sign-in
 

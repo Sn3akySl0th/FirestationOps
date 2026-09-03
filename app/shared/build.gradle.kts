@@ -63,6 +63,11 @@ kotlin {
             implementation(libs.kotlinx.coroutinesPlayServices)
             implementation("com.google.android.gms:play-services-auth:21.3.0")
             implementation("com.google.firebase:firebase-appcheck")
+            implementation(libs.androidx.camera.core)
+            implementation(libs.androidx.camera.camera2)
+            implementation(libs.androidx.camera.lifecycle)
+            implementation(libs.androidx.camera.view)
+            implementation(libs.mlkit.barcode.scanning)
         }
         
         iosMain.dependencies {

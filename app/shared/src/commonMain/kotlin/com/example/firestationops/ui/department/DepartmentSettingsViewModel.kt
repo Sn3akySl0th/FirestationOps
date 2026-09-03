@@ -2,6 +2,7 @@ package com.example.firestationops.ui.department
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.firestationops.domain.auth.PasswordResetRules
 import com.example.firestationops.domain.bootstrap.DepartmentCatalogBootstrap
 import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.membership.MemberRosterInput
@@ -40,6 +41,7 @@ data class MemberEditorState(
     val memberNumber: String = "",
     val initialPassword: String = "",
     val showInitialPasswordField: Boolean = false,
+    val canSendPasswordReset: Boolean = false,
     val roles: Set<Role> = setOf(Role.MEMBER),
     val isActive: Boolean = true,
     val isSaving: Boolean = false
@@ -119,7 +121,7 @@ class DepartmentSettingsViewModel(
 
     fun openNewMemberEditor() {
         if (memberRosterRepository.availability !is MemberRosterAvailability.Available) return
-        _editorState.value = MemberEditorState(showInitialPasswordField = cloudSyncEnabled)
+        _editorState.value = MemberEditorState()
     }
 
     fun openMemberEditor(existing: Member) {
@@ -131,7 +133,9 @@ class DepartmentSettingsViewModel(
             lastName = existing.lastName,
             memberNumber = existing.memberNumber.orEmpty(),
             roles = existing.roles,
-            isActive = existing.isActive
+            isActive = existing.isActive,
+            canSendPasswordReset = cloudSyncEnabled && existing.isActive &&
+                !MemberProvisioningRules.isPendingMemberId(existing.id)
         )
     }
 
@@ -193,16 +197,21 @@ class DepartmentSettingsViewModel(
                 editingMemberId = editor.memberId
             )
 
-            result.onSuccess { savedMember ->
+            result.onSuccess { write ->
+                val savedMember = write.member
                 if (cloudSyncEnabled) {
                     syncCoordinator.syncDepartment(member.departmentId)
                 }
                 _editorState.value = null
                 _actionMessage.value = when {
-                    editor.showInitialPasswordField && editor.memberId == null ->
-                        "Member added. They can sign in with ${savedMember.email} and the password you set."
+                    editor.memberId == null && write.passwordSetupEmailSent == true ->
+                        PasswordResetRules.INVITE_EMAIL_SENT_MESSAGE
+                    editor.memberId == null && write.passwordSetupEmailSent == false ->
+                        PasswordResetRules.INVITE_EMAIL_FAILED_MESSAGE
                     MemberProvisioningRules.isPendingMemberId(savedMember.id) ->
                         "Member saved to the roster."
+                    editor.memberId == null && cloudSyncEnabled ->
+                        PasswordResetRules.INVITE_EMAIL_SENT_MESSAGE
                     else ->
                         "Member roster updated."
                 }
@@ -211,6 +220,23 @@ class DepartmentSettingsViewModel(
                 _editorState.value = editor.copy(isSaving = false, initialPassword = "")
                 _actionMessage.value = error.message ?: "Unable to save member."
             }
+        }
+    }
+
+    fun sendPasswordReset() {
+        val editor = _editorState.value ?: return
+        val memberId = editor.memberId ?: return
+        viewModelScope.launch {
+            _editorState.value = editor.copy(isSaving = true)
+            memberRosterRepository.sendPasswordReset(member, memberId)
+                .onSuccess {
+                    _editorState.value = editor.copy(isSaving = false)
+                    _actionMessage.value = "Password reset email sent to ${editor.email}."
+                }
+                .onFailure { error ->
+                    _editorState.value = editor.copy(isSaving = false)
+                    _actionMessage.value = error.message ?: "Unable to send password reset email."
+                }
         }
     }
 

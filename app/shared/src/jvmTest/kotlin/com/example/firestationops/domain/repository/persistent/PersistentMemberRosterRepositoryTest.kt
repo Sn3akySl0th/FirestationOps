@@ -41,7 +41,7 @@ class PersistentMemberRosterRepositoryTest {
         )
 
         assertTrue(result.isSuccess)
-        assertEquals("221", result.getOrThrow().departmentId)
+        assertEquals("221", result.getOrThrow().member.departmentId)
         assertEquals("221", database.getAllMembersByDepartment("221").single { it.email == "member@example.test" }.departmentId)
     }
 
