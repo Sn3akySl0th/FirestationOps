@@ -141,6 +141,7 @@ object FirestoreMappers {
         "model" to apparatus.model,
         "vin" to apparatus.vin,
         "licensePlate" to apparatus.licensePlate,
+        "barcode" to apparatus.barcode,
         "createdAt" to apparatus.createdAt,
         "updatedAt" to apparatus.updatedAt
     )
@@ -165,6 +166,7 @@ object FirestoreMappers {
             model = data["model"] as? String,
             vin = data["vin"] as? String,
             licensePlate = data["licensePlate"] as? String,
+            barcode = data["barcode"] as? String,
             createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,
             updatedAt = (data["updatedAt"] as? Number)?.toLong() ?: 0L
         )

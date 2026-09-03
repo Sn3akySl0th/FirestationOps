@@ -21,7 +21,7 @@ Roles do not bypass tenant isolation. An `ADMIN` in `dept-alpha` has no authorit
 
 ## Server-controlled roster operations
 
-Android administrators use callable Functions named `provisionDepartmentMember`, `updateDepartmentMember`, and `deactivateDepartmentMember`. Each Function:
+Android administrators use callable Functions named `provisionDepartmentMember`, `updateDepartmentMember`, `deactivateDepartmentMember`, and `sendDepartmentMemberPasswordReset`. Each Function:
 
 - Authenticates the caller and reloads the caller's canonical membership.
 - Requires an active `ADMIN` actor.
@@ -30,6 +30,9 @@ Android administrators use callable Functions named `provisionDepartmentMember`,
 - Writes canonical and nested roster records in one Firestore transaction.
 - Prevents removal or deactivation of the final active administrator.
 - Sets custom claims through the Admin SDK and revokes refresh tokens after authority changes.
+- For new members, creates the Auth account without requiring the administrator to choose a password, then emails a Firebase password-setup link. Administrators can resend that link with `sendDepartmentMemberPasswordReset`.
+
+Do not enable public passwordless or self-serve signup. Department membership is still created only by an active administrator. Email-link sign-in is not used for daily login because field devices must keep working offline after the first password is set.
 
 Desktop cloud roster editing is intentionally unavailable until it can use the same callable flow. Desktop users receive an explicit explanation rather than a local-only success indication.
 

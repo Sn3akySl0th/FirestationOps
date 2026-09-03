@@ -217,6 +217,63 @@ describe("membership callable service", () => {
     assert.equal(user.customClaims.departmentId, "dept-alpha");
     assert.deepEqual(user.customClaims.roles, ["MEMBER"]);
     assert.equal(user.customClaims.isActive, true);
+    assert.equal(result.passwordResetEmailSent, false);
+  });
+
+  test("provisions without a password and sends a reset email", async () => {
+    await createMember("admin-alpha", "dept-alpha", ["ADMIN"]);
+    const sent = [];
+    const invitingService = createMembershipService({
+      auth,
+      firestore,
+      logger,
+      clock: () => 100,
+      sendPasswordResetEmail: async (email) => {
+        sent.push(email);
+      },
+    });
+    const withoutPassword = { ...validProvision() };
+    delete withoutPassword.password;
+    const result = await invitingService.provisionDepartmentMember(
+      request("admin-alpha", withoutPassword),
+    );
+    assert.equal(result.passwordResetEmailSent, true);
+    assert.deepEqual(sent, ["new.member@example.test"]);
+    const user = await auth.getUser(result.member.id);
+    assert.equal(user.email, "new.member@example.test");
+    assert.equal(user.disabled, false);
+  });
+
+  test("sendDepartmentMemberPasswordReset is admin and tenant scoped", async () => {
+    await createMember("admin-alpha", "dept-alpha", ["ADMIN"]);
+    await createMember("member-alpha", "dept-alpha", ["MEMBER"]);
+    await createMember("member-bravo", "dept-bravo", ["MEMBER"]);
+    const sent = [];
+    const invitingService = createMembershipService({
+      auth,
+      firestore,
+      logger,
+      clock: () => 100,
+      sendPasswordResetEmail: async (email) => {
+        sent.push(email);
+      },
+    });
+    await invitingService.sendDepartmentMemberPasswordReset(request("admin-alpha", {
+      targetUserId: "member-alpha",
+    }));
+    assert.deepEqual(sent, ["member-alpha@example.test"]);
+    await rejectsWithCode(
+      invitingService.sendDepartmentMemberPasswordReset(request("admin-alpha", {
+        targetUserId: "member-bravo",
+      })),
+      "permission-denied",
+    );
+    await rejectsWithCode(
+      invitingService.sendDepartmentMemberPasswordReset(request("member-alpha", {
+        targetUserId: "admin-alpha",
+      })),
+      "permission-denied",
+    );
   });
 
   test("prevents removal or deactivation of the final active administrator", async () => {

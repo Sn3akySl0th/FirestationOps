@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -86,10 +88,9 @@ fun App(
 ) {
     val loginViewModel = remember { LoginViewModel(authRepository) }
     val userState by loginViewModel.userState.collectAsState()
-    
-    LaunchedEffect(userState) {
-        println("App: Current userState: $userState")
-    }
+    val passwordResetMessage by loginViewModel.passwordResetMessage.collectAsState()
+    val isResettingPassword by loginViewModel.isResettingPassword.collectAsState()
+    var confirmPasswordReset by remember { mutableStateOf(false) }
 
     LaunchedEffect(userState, syncCoordinator) {
         val authenticated = userState as? UserState.Authenticated ?: return@LaunchedEffect
@@ -125,6 +126,8 @@ fun App(
                             MainContent(
                                 member = state.member,
                                 onLogout = loginViewModel::logout,
+                                onResetPassword = { confirmPasswordReset = true },
+                                isResettingPassword = isResettingPassword,
                                 content = { 
                                     DashboardScreen(
                                         viewModel = dashboardViewModel,
@@ -277,6 +280,51 @@ fun App(
                     LoginScreen(viewModel = loginViewModel)
                 }
             }
+            val authenticated = userState as? UserState.Authenticated
+            if (authenticated != null && confirmPasswordReset) {
+                AlertDialog(
+                    onDismissRequest = {
+                        if (!isResettingPassword) confirmPasswordReset = false
+                    },
+                    title = { Text("Reset password") },
+                    text = {
+                        Text(
+                            "Send a password reset email to ${authenticated.member.email}?"
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                confirmPasswordReset = false
+                                loginViewModel.requestPasswordReset(authenticated.member.email)
+                            },
+                            enabled = !isResettingPassword
+                        ) {
+                            Text("Send email")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { confirmPasswordReset = false },
+                            enabled = !isResettingPassword
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+            if (authenticated != null && passwordResetMessage != null) {
+                AlertDialog(
+                    onDismissRequest = loginViewModel::clearPasswordResetMessage,
+                    title = { Text("Password reset") },
+                    text = { Text(passwordResetMessage.orEmpty()) },
+                    confirmButton = {
+                        TextButton(onClick = loginViewModel::clearPasswordResetMessage) {
+                            Text("OK")
+                        }
+                    }
+                )
+            }
         }
     }
 }
@@ -285,6 +333,8 @@ fun App(
 fun MainContent(
     member: com.example.firestationops.domain.model.Member,
     onLogout: () -> Unit,
+    onResetPassword: () -> Unit = {},
+    isResettingPassword: Boolean = false,
     content: @Composable () -> Unit
 ) {
     Column(
@@ -322,11 +372,22 @@ fun MainContent(
                     )
                 }
                 
-                Button(
-                    onClick = onLogout,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Logout")
+                    TextButton(
+                        onClick = onResetPassword,
+                        enabled = !isResettingPassword
+                    ) {
+                        Text(if (isResettingPassword) "Sending..." else "Reset password")
+                    }
+                    Button(
+                        onClick = onLogout,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Logout")
+                    }
                 }
             }
         }

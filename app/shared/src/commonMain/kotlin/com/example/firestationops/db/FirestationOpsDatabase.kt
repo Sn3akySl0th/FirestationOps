@@ -25,25 +25,31 @@ class FirestationOpsDatabase(driver: SqlDriver) {
     // Apparatus
     fun getAllApparatus(): List<Apparatus> = dbQueries.selectAllApparatus().executeAsList().map {
         Apparatus(
-            id = it.id, 
-            departmentId = it.departmentId, 
-            stationId = it.stationId, 
-            name = it.name, 
-            type = it.type, 
-            radioName = it.radioName, 
-            status = ApparatusStatus.valueOf(it.status)
+            id = it.id,
+            departmentId = it.departmentId,
+            stationId = it.stationId,
+            name = it.name,
+            type = it.type,
+            radioName = it.radioName,
+            status = ApparatusStatus.valueOf(it.status),
+            vin = it.vin,
+            licensePlate = it.licensePlate,
+            barcode = it.barcode
         )
     }
 
     fun insertApparatus(apparatus: Apparatus) {
         dbQueries.insertApparatus(
-            id = apparatus.id, 
-            departmentId = apparatus.departmentId, 
-            stationId = apparatus.stationId, 
-            name = apparatus.name, 
-            type = apparatus.type, 
-            radioName = apparatus.radioName, 
-            status = apparatus.status.name
+            id = apparatus.id,
+            departmentId = apparatus.departmentId,
+            stationId = apparatus.stationId,
+            name = apparatus.name,
+            type = apparatus.type,
+            radioName = apparatus.radioName,
+            status = apparatus.status.name,
+            vin = apparatus.vin?.trim()?.takeIf { it.isNotEmpty() },
+            licensePlate = apparatus.licensePlate?.trim()?.takeIf { it.isNotEmpty() },
+            barcode = apparatus.barcode?.trim()?.takeIf { it.isNotEmpty() }
         )
     }
 

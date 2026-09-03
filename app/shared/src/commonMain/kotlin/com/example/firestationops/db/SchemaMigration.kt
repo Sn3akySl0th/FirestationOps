@@ -33,6 +33,19 @@ internal object SchemaMigration {
         )
         ensureInspectionVoidColumns(driver)
         ensureAttachmentFailureColumns(driver)
+        ensureApparatusIdentityColumns(driver)
+    }
+
+    private fun ensureApparatusIdentityColumns(driver: SqlDriver) {
+        listOf("vin", "licensePlate", "barcode").forEach { column ->
+            runCatching {
+                driver.execute(
+                    identifier = null,
+                    sql = "ALTER TABLE ApparatusEntity ADD COLUMN $column TEXT;",
+                    parameters = 0
+                )
+            }
+        }
     }
 
     private fun ensureAttachmentFailureColumns(driver: SqlDriver) {

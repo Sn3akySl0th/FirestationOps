@@ -72,7 +72,7 @@ class PersistentAuthRepository(private val database: FirestationOpsDatabase) : A
                 database.insertMember(Member(
                     id = "user-clefebvre-id",
                     departmentId = DepartmentCatalogProfiles.CALHOUN_DEPARTMENT_ID,
-                    memberNumber = "221",
+                    memberNumber = "521",
                     email = yourEmail,
                     firstName = "Chris",
                     lastName = "Lefebvre",
@@ -139,4 +139,7 @@ class PersistentAuthRepository(private val database: FirestationOpsDatabase) : A
         _userState.value = UserState.Unauthenticated
         return Result.success(Unit)
     }
+
+    override suspend fun requestPasswordReset(email: String): Result<Unit> =
+        Result.failure(Exception(com.example.firestationops.domain.auth.PasswordResetRules.UNAVAILABLE_OFFLINE_MESSAGE))
 }

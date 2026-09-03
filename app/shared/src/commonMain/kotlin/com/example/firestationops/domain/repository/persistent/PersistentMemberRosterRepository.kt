@@ -4,6 +4,7 @@ import com.example.firestationops.currentTimeMillis
 import com.example.firestationops.db.FirestationOpsDatabase
 import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.membership.MemberRosterInput
+import com.example.firestationops.domain.membership.MemberRosterWrite
 import com.example.firestationops.domain.model.Member
 import com.example.firestationops.domain.repository.MemberRosterRepository
 import com.example.firestationops.domain.repository.MemberRosterAvailability
@@ -19,7 +20,7 @@ class PersistentMemberRosterRepository(
         input: MemberRosterInput,
         editingMemberId: String?,
         assignedMemberId: String?
-    ): Result<Member> = runCatching {
+    ): Result<MemberRosterWrite> = runCatching {
         MemberProvisioningRules.requireAdmin(actingMember)?.let { error(it) }
 
         val existingMembers = database.getAllMembersByDepartment(actingMember.departmentId)
@@ -58,7 +59,7 @@ class PersistentMemberRosterRepository(
         )
 
         database.upsertCanonicalMember(member)
-        member
+        MemberRosterWrite(member = member)
     }
 
     override suspend fun setMemberActive(

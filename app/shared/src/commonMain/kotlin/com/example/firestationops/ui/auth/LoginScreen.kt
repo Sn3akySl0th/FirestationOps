@@ -19,6 +19,8 @@ fun LoginScreen(viewModel: LoginViewModel) {
     val email by viewModel.email.collectAsState()
     val password by viewModel.password.collectAsState()
     val userState by viewModel.userState.collectAsState()
+    val passwordResetMessage by viewModel.passwordResetMessage.collectAsState()
+    val isResettingPassword by viewModel.isResettingPassword.collectAsState()
     val focusManager = LocalFocusManager.current
 
     Column(
@@ -74,6 +76,14 @@ fun LoginScreen(viewModel: LoginViewModel) {
             )
         }
 
+        if (passwordResetMessage != null) {
+            Text(
+                text = passwordResetMessage.orEmpty(),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+
         Button(
             onClick = viewModel::login,
             modifier = Modifier.fillMaxWidth(),
@@ -92,9 +102,18 @@ fun LoginScreen(viewModel: LoginViewModel) {
         Spacer(modifier = Modifier.height(8.dp))
 
         TextButton(
-            onClick = viewModel::loginOffline,
+            onClick = viewModel::requestPasswordReset,
             modifier = Modifier.fillMaxWidth(),
-            enabled = userState !is UserState.Loading
+            enabled = userState !is UserState.Loading && !isResettingPassword
+        ) {
+            Text(if (isResettingPassword) "Sending reset email..." else "Forgot password")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        TextButton(
+            onClick = viewModel::loginOffline,
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text("Sign in offline (recommended on this device)")
         }

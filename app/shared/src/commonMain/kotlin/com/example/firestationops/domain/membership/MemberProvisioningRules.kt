@@ -63,8 +63,8 @@ object MemberProvisioningRules {
     fun normalizeEmail(email: String): String = email.trim().lowercase()
 
     fun validateInitialPassword(password: String?): String? {
-        val value = password?.trim().orEmpty()
-        if (value.length < 6) {
+        if (password.isNullOrEmpty()) return null
+        if (password.length < 6) {
             return "Initial password must be at least 6 characters."
         }
         return null

@@ -253,6 +253,9 @@ fun CatalogSettingsScreen(
             onNameChange = viewModel::updateApparatusName,
             onTypeChange = viewModel::updateApparatusType,
             onRadioNameChange = viewModel::updateApparatusRadioName,
+            onVinChange = viewModel::updateApparatusVin,
+            onLicensePlateChange = viewModel::updateApparatusLicensePlate,
+            onBarcodeChange = viewModel::updateApparatusBarcode,
             onStatusChange = viewModel::updateApparatusStatus
         )
     }
@@ -336,6 +339,9 @@ private fun ApparatusCard(
             Text("${apparatus.name} • ${apparatus.type}", style = MaterialTheme.typography.bodySmall)
             Text("Station: $stationName", style = MaterialTheme.typography.bodySmall)
             Text(apparatus.status.name, style = MaterialTheme.typography.labelMedium)
+            apparatus.barcode?.takeIf { it.isNotBlank() }?.let { barcode ->
+                Text("Barcode: $barcode", style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }
@@ -426,6 +432,9 @@ private fun ApparatusEditorDialog(
     onNameChange: (String) -> Unit,
     onTypeChange: (String) -> Unit,
     onRadioNameChange: (String) -> Unit,
+    onVinChange: (String) -> Unit,
+    onLicensePlateChange: (String) -> Unit,
+    onBarcodeChange: (String) -> Unit,
     onStatusChange: (ApparatusStatus) -> Unit
 ) {
     var stationMenuExpanded by remember { mutableStateOf(false) }
@@ -468,6 +477,30 @@ private fun ApparatusEditorDialog(
                     value = editor.radioName,
                     onValueChange = onRadioNameChange,
                     label = { Text("Radio name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    enabled = !editor.isSaving
+                )
+                OutlinedTextField(
+                    value = editor.barcode,
+                    onValueChange = onBarcodeChange,
+                    label = { Text("Barcode / QR value (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    enabled = !editor.isSaving
+                )
+                OutlinedTextField(
+                    value = editor.vin,
+                    onValueChange = onVinChange,
+                    label = { Text("VIN (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    enabled = !editor.isSaving
+                )
+                OutlinedTextField(
+                    value = editor.licensePlate,
+                    onValueChange = onLicensePlateChange,
+                    label = { Text("License plate (optional)") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     enabled = !editor.isSaving

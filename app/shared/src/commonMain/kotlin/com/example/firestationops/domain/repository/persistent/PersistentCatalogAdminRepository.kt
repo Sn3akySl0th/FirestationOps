@@ -63,16 +63,26 @@ class PersistentCatalogAdminRepository(
 
         val stations = database.getAllStations()
             .filter { it.departmentId == actingMember.departmentId }
+        val departmentApparatus = database.getAllApparatus()
+            .filter { it.departmentId == actingMember.departmentId }
         val normalized = input.copy(
             name = input.name.trim(),
             type = input.type.trim(),
-            radioName = input.radioName.trim()
+            radioName = input.radioName.trim(),
+            vin = input.vin?.trim()?.takeIf { it.isNotEmpty() },
+            licensePlate = input.licensePlate?.trim()?.takeIf { it.isNotEmpty() },
+            barcode = input.barcode?.trim()?.takeIf { it.isNotEmpty() }
         )
-        CatalogAdminRules.validateApparatusInput(normalized, stations)?.let { error(it) }
+        CatalogAdminRules.validateApparatusInput(
+            input = normalized,
+            stations = stations,
+            existingApparatus = departmentApparatus,
+            editingApparatusId = editingApparatusId
+        )?.let { error(it) }
 
         val now = currentTimeMillis()
         val existing = editingApparatusId?.let { id ->
-            database.getAllApparatus().find { it.id == id && it.departmentId == actingMember.departmentId }
+            departmentApparatus.find { it.id == id }
                 ?: error("Apparatus not found.")
         }
 
@@ -87,8 +97,9 @@ class PersistentCatalogAdminRepository(
             year = existing?.year,
             make = existing?.make,
             model = existing?.model,
-            vin = existing?.vin,
-            licensePlate = existing?.licensePlate,
+            vin = normalized.vin,
+            licensePlate = normalized.licensePlate,
+            barcode = normalized.barcode,
             createdAt = existing?.createdAt ?: now,
             updatedAt = now
         )

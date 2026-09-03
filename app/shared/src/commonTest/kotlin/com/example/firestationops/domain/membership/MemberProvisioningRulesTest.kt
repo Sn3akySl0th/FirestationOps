@@ -137,16 +137,28 @@ class MemberProvisioningRulesTest {
     }
 
     @Test
+    fun validateRosterInput_acceptsCalhounBadge521() {
+        val input = MemberRosterInput(
+            email = "new@example.com",
+            firstName = "Chris",
+            lastName = "Lefebvre",
+            memberNumber = "521"
+        )
+
+        assertNull(MemberProvisioningRules.validateRosterInput(input, "5", emptyList()))
+    }
+
+    @Test
     fun validateRosterInput_rejectsCalhounBadgeOutsideRange() {
         val input = MemberRosterInput(
             email = "new@example.com",
             firstName = "Jamie",
             lastName = "Lee",
-            memberNumber = "199"
+            memberNumber = "499"
         )
 
         assertEquals(
-            "Member number must be between 200 and 225.",
+            "Member number must be between 500 and 599.",
             MemberProvisioningRules.validateRosterInput(input, "5", emptyList())
         )
     }
@@ -176,6 +188,8 @@ class MemberProvisioningRulesTest {
 
     @Test
     fun validateInitialPassword_requiresAtLeastSixCharacters() {
+        assertNull(MemberProvisioningRules.validateInitialPassword(null))
+        assertNull(MemberProvisioningRules.validateInitialPassword(""))
         assertEquals(
             "Initial password must be at least 6 characters.",
             MemberProvisioningRules.validateInitialPassword("12345")

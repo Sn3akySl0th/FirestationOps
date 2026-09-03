@@ -55,6 +55,9 @@ data class ApparatusEditorState(
     val name: String = "",
     val type: String = "",
     val radioName: String = "",
+    val vin: String = "",
+    val licensePlate: String = "",
+    val barcode: String = "",
     val status: ApparatusStatus = ApparatusStatus.IN_SERVICE,
     val isSaving: Boolean = false
 )
@@ -183,6 +186,9 @@ class CatalogSettingsViewModel(
             name = apparatus.name,
             type = apparatus.type,
             radioName = apparatus.radioName,
+            vin = apparatus.vin.orEmpty(),
+            licensePlate = apparatus.licensePlate.orEmpty(),
+            barcode = apparatus.barcode.orEmpty(),
             status = apparatus.status
         )
     }
@@ -207,6 +213,18 @@ class CatalogSettingsViewModel(
         _apparatusEditor.value = _apparatusEditor.value?.copy(radioName = value)
     }
 
+    fun updateApparatusVin(value: String) {
+        _apparatusEditor.value = _apparatusEditor.value?.copy(vin = value)
+    }
+
+    fun updateApparatusLicensePlate(value: String) {
+        _apparatusEditor.value = _apparatusEditor.value?.copy(licensePlate = value)
+    }
+
+    fun updateApparatusBarcode(value: String) {
+        _apparatusEditor.value = _apparatusEditor.value?.copy(barcode = value)
+    }
+
     fun updateApparatusStatus(value: ApparatusStatus) {
         _apparatusEditor.value = _apparatusEditor.value?.copy(status = value)
     }
@@ -222,7 +240,10 @@ class CatalogSettingsViewModel(
                     name = editor.name,
                     type = editor.type,
                     radioName = editor.radioName,
-                    status = editor.status
+                    status = editor.status,
+                    vin = editor.vin,
+                    licensePlate = editor.licensePlate,
+                    barcode = editor.barcode
                 ),
                 editingApparatusId = editor.apparatusId
             )

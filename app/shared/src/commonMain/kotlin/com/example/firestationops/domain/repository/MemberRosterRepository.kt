@@ -1,6 +1,7 @@
 package com.example.firestationops.domain.repository
 
 import com.example.firestationops.domain.membership.MemberRosterInput
+import com.example.firestationops.domain.membership.MemberRosterWrite
 import com.example.firestationops.domain.model.Member
 
 sealed interface MemberRosterAvailability {
@@ -16,11 +17,18 @@ interface MemberRosterRepository {
         input: MemberRosterInput,
         editingMemberId: String? = null,
         assignedMemberId: String? = null
-    ): Result<Member>
+    ): Result<MemberRosterWrite>
 
     suspend fun setMemberActive(
         actingMember: Member,
         memberId: String,
         isActive: Boolean
     ): Result<Member>
+
+    suspend fun sendPasswordReset(
+        actingMember: Member,
+        memberId: String
+    ): Result<Unit> = Result.failure(
+        UnsupportedOperationException("Password reset is not available.")
+    )
 }

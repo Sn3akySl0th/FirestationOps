@@ -2,6 +2,7 @@ package com.example.firestationops.data.firebase
 
 import com.example.firestationops.db.FirestationOpsDatabase
 import com.example.firestationops.domain.auth.AuthSessionRecovery
+import com.example.firestationops.domain.auth.PasswordResetRules
 import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
 import com.example.firestationops.domain.bootstrap.DepartmentCatalogProfiles
 import com.example.firestationops.domain.membership.MemberProvisioningRules
@@ -87,6 +88,29 @@ class JvmFirebaseAuthRepository(
         database.setSessionUserId(null)
         _userState.value = UserState.Unauthenticated
         return Result.success(Unit)
+    }
+
+    override suspend fun requestPasswordReset(email: String): Result<Unit> {
+        PasswordResetRules.validateEmail(email)?.let {
+            return Result.failure(IllegalArgumentException(it))
+        }
+        if (!firebaseEnabled) {
+            return Result.failure(IllegalStateException(PasswordResetRules.UNAVAILABLE_OFFLINE_MESSAGE))
+        }
+        val apiKey = DesktopFirebaseConfig.load()?.apiKey?.takeIf { it.isNotBlank() }
+            ?: return Result.failure(IllegalStateException(PasswordResetRules.UNAVAILABLE_OFFLINE_MESSAGE))
+        val normalized = PasswordResetRules.normalizeEmail(email)
+        return JvmIdentityToolkitClient.sendPasswordResetEmail(apiKey, normalized)
+            .recover { error ->
+                val message = error.message.orEmpty()
+                if (
+                    message.contains("EMAIL_NOT_FOUND", ignoreCase = true) ||
+                    message.contains("USER_NOT_FOUND", ignoreCase = true)
+                ) {
+                    return@recover
+                }
+                throw error
+            }
     }
 
     private suspend fun loadCanonicalMember(uid: String): Member {

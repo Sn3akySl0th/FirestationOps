@@ -10,4 +10,6 @@ interface AuthRepository {
     suspend fun loginOffline(email: String, password: String): Result<Unit> =
         Result.failure(UnsupportedOperationException("Offline login is not available."))
     suspend fun logout(): Result<Unit>
+    suspend fun requestPasswordReset(email: String): Result<Unit> =
+        Result.failure(UnsupportedOperationException("Password reset is not available."))
 }

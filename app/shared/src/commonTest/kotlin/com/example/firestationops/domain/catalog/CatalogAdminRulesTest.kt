@@ -49,6 +49,33 @@ class CatalogAdminRulesTest {
     }
 
     @Test
+    fun validateApparatusInput_rejectsDuplicateBarcode() {
+        val existing = Apparatus(
+            id = "app-1",
+            departmentId = "dept-1",
+            stationId = station.id,
+            name = "Engine 1",
+            type = "Engine",
+            radioName = "E1",
+            barcode = "EQ-E1"
+        )
+        assertEquals(
+            "Another apparatus already uses this barcode.",
+            CatalogAdminRules.validateApparatusInput(
+                ApparatusCatalogInput(
+                    stationId = station.id,
+                    name = "Engine 2",
+                    type = "Engine",
+                    radioName = "E2",
+                    barcode = "eq-e1"
+                ),
+                stations = listOf(station),
+                existingApparatus = listOf(existing)
+            )
+        )
+    }
+
+    @Test
     fun validateApparatusInput_requiresValidStation() {
         assertEquals(
             "Select a valid station.",

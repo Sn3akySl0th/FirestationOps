@@ -12,7 +12,10 @@ CREATE TABLE ApparatusEntity (
     name TEXT NOT NULL,
     type TEXT NOT NULL,
     radioName TEXT NOT NULL,
-    status TEXT NOT NULL
+    status TEXT NOT NULL,
+    vin TEXT,
+    licensePlate TEXT,
+    barcode TEXT
 );
 
 CREATE TABLE InspectionTemplateEntity (
@@ -183,8 +186,8 @@ selectAllApparatus:
 SELECT * FROM ApparatusEntity;
 
 insertApparatus:
-INSERT OR REPLACE INTO ApparatusEntity(id, departmentId, stationId, name, type, radioName, status)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO ApparatusEntity(id, departmentId, stationId, name, type, radioName, status, vin, licensePlate, barcode)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 selectAllTemplates:
 SELECT * FROM InspectionTemplateEntity;

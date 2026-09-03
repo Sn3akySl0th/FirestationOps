@@ -1,4 +1,5 @@
 const { HttpsError } = require("firebase-functions/v2/https");
+const { randomBytes } = require("node:crypto");
 
 const ALLOWED_ROLES = new Set([
   "MEMBER",
@@ -9,7 +10,7 @@ const ALLOWED_ROLES = new Set([
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function createMembershipService({ auth, firestore, logger, clock = () => Date.now() }) {
+function createMembershipService({ auth, firestore, logger, clock = () => Date.now(), sendPasswordResetEmail }) {
   async function provisionDepartmentMember(request) {
     const actorUid = requireAuthenticatedUid(request);
     const input = validateProvisionInput(request.data);
@@ -23,7 +24,7 @@ function createMembershipService({ auth, firestore, logger, clock = () => Date.n
 
       const userRecord = await auth.createUser({
         email: input.email,
-        password: input.password,
+        password: input.password || randomBytes(32).toString("hex"),
         displayName: `${input.firstName} ${input.lastName}`,
         disabled: false,
       });
@@ -48,12 +49,26 @@ function createMembershipService({ auth, firestore, logger, clock = () => Date.n
       });
 
       await synchronizeMembershipAuthority(member, null);
+      let passwordResetEmailSent = false;
+      if (!input.password && typeof sendPasswordResetEmail === "function") {
+        try {
+          await sendPasswordResetEmail(input.email);
+          passwordResetEmailSent = true;
+        } catch (error) {
+          logFailure("department_member_password_reset_email_failed", error, {
+            actorUid,
+            targetUid: createdUid,
+            departmentId,
+          });
+        }
+      }
       logger.info("department_member_provisioned", {
         actorUid,
         targetUid: createdUid,
         departmentId,
+        passwordResetEmailSent,
       });
-      return { member: sanitizeMember(member) };
+      return { member: sanitizeMember(member), passwordResetEmailSent };
     } catch (error) {
       if (createdUid) {
         await cleanupFailedProvision(createdUid, departmentId);
@@ -213,6 +228,43 @@ function createMembershipService({ auth, firestore, logger, clock = () => Date.n
     }
   }
 
+  async function sendDepartmentMemberPasswordReset(request) {
+    const actorUid = requireAuthenticatedUid(request);
+    const input = validateDeactivateInput(request.data);
+    let departmentId = null;
+
+    try {
+      const actor = await loadActiveAdmin(actorUid);
+      departmentId = actor.departmentId;
+      const targetSnapshot = await firestore.doc(`members/${input.targetUserId}`).get();
+      if (!targetSnapshot.exists) {
+        throw new HttpsError("not-found", "Member not found.");
+      }
+      const target = targetSnapshot.data();
+      requireSameDepartment(target, departmentId);
+      if (target.isActive !== true) {
+        throw new HttpsError("failed-precondition", "Password reset is only available for active members.");
+      }
+      if (typeof sendPasswordResetEmail !== "function") {
+        throw new HttpsError("failed-precondition", "Password reset email is not configured.");
+      }
+      await sendPasswordResetEmail(String(target.email || ""));
+      logger.info("department_member_password_reset_sent", {
+        actorUid,
+        targetUid: input.targetUserId,
+        departmentId,
+      });
+      return { emailSent: true };
+    } catch (error) {
+      logFailure("department_member_password_reset_failed", error, {
+        actorUid,
+        targetUid: input.targetUserId,
+        departmentId,
+      });
+      throw mapCallableError(error);
+    }
+  }
+
   async function loadActiveAdmin(uid) {
     const snapshot = await firestore.doc(`members/${uid}`).get();
     requireActiveAdminSnapshot(snapshot, uid);
@@ -340,6 +392,7 @@ function createMembershipService({ auth, firestore, logger, clock = () => Date.n
     provisionDepartmentMember,
     updateDepartmentMember,
     deactivateDepartmentMember,
+    sendDepartmentMemberPasswordReset,
     synchronizeClaims,
     synchronizeMembershipAuthority,
   };
@@ -393,7 +446,7 @@ function validateProvisionInput(data) {
     "isActive",
   ]);
   const input = validateSharedMemberInput(data);
-  const password = requiredString(data.password, "password", 6, 128, false);
+  const password = optionalPassword(data.password);
   return { ...input, password };
 }
 
@@ -473,6 +526,17 @@ function requiredString(value, fieldName, minLength, maxLength, trim = true) {
   return normalized;
 }
 
+function optionalPassword(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string") {
+    throw new HttpsError("invalid-argument", "password must be a string.");
+  }
+  if (value.length < 6 || value.length > 128) {
+    throw new HttpsError("invalid-argument", "The initial password is not valid.");
+  }
+  return value;
+}
+
 function optionalString(value, fieldName, maxLength) {
   if (value === null || value === undefined || value === "") return null;
   return requiredString(value, fieldName, 1, maxLength);
@@ -534,7 +598,11 @@ function mapCallableError(error) {
       return new HttpsError("invalid-argument", "Enter a valid email address.");
     case "auth/invalid-password":
       return new HttpsError("invalid-argument", "The initial password is not valid.");
+    case "auth/too-many-attempts-try-later":
+    case "TOO_MANY_ATTEMPTS_TRY_LATER":
+      return new HttpsError("resource-exhausted", "Too many password reset attempts. Try again later.");
     case "auth/user-not-found":
+    case "EMAIL_NOT_FOUND":
       return new HttpsError("not-found", "Member sign-in account not found.");
     case 6:
     case "6":

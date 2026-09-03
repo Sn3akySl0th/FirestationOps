@@ -34,7 +34,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.firestationops.domain.membership.MemberProvisioningRules
 import com.example.firestationops.domain.model.Member
@@ -208,7 +207,7 @@ fun DepartmentSettingsScreen(
                         item {
                             Text(
                                 if (state.canManageRoster) {
-                                    "When adding a member, set an initial password. The secure member service creates their sign-in account."
+                                    "New members receive an email to set their own password. Use Send password reset if they need another link."
                                 } else {
                                     "New members need a member profile before they can sign in."
                                 },
@@ -230,9 +229,9 @@ fun DepartmentSettingsScreen(
             onFirstNameChange = viewModel::updateEditorFirstName,
             onLastNameChange = viewModel::updateEditorLastName,
             onMemberNumberChange = viewModel::updateEditorMemberNumber,
-            onInitialPasswordChange = viewModel::updateEditorInitialPassword,
             onToggleRole = viewModel::toggleEditorRole,
-            onActiveChange = viewModel::updateEditorActive
+            onActiveChange = viewModel::updateEditorActive,
+            onSendPasswordReset = viewModel::sendPasswordReset
         )
     }
 }
@@ -278,9 +277,9 @@ private fun MemberEditorDialog(
     onFirstNameChange: (String) -> Unit,
     onLastNameChange: (String) -> Unit,
     onMemberNumberChange: (String) -> Unit,
-    onInitialPasswordChange: (String) -> Unit,
     onToggleRole: (Role) -> Unit,
-    onActiveChange: (Boolean) -> Unit
+    onActiveChange: (Boolean) -> Unit,
+    onSendPasswordReset: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -322,20 +321,21 @@ private fun MemberEditorDialog(
                     enabled = !editor.isSaving
                 )
 
-                if (editor.showInitialPasswordField) {
-                    OutlinedTextField(
-                        value = editor.initialPassword,
-                        onValueChange = onInitialPasswordChange,
-                        label = { Text("Initial password") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        enabled = !editor.isSaving
-                    )
+                if (editor.memberId == null) {
                     Text(
-                        "The password is sent only to the secure member service and is cleared after submission.",
+                        "They will receive an email to set their own password. You do not need to choose one.",
                         style = MaterialTheme.typography.bodySmall
                     )
+                }
+
+                if (editor.canSendPasswordReset) {
+                    TextButton(
+                        onClick = onSendPasswordReset,
+                        enabled = !editor.isSaving,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Send password reset")
+                    }
                 }
 
                 Text("Roles", style = MaterialTheme.typography.labelLarge)

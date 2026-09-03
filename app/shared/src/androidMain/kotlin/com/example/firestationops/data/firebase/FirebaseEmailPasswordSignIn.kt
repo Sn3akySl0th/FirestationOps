@@ -12,6 +12,27 @@ internal suspend fun FirebaseAuth.signInWithEmailAndPasswordAwait(
     email: String,
     password: String,
     timeoutMs: Long,
+): AuthResult = awaitAuthTask(
+    timeoutMs = timeoutMs,
+    timeoutLabel = "Firebase authentication",
+) {
+    signInWithEmailAndPassword(email, password)
+}
+
+internal suspend fun FirebaseAuth.signInWithCustomTokenAwait(
+    customToken: String,
+    timeoutMs: Long,
+): AuthResult = awaitAuthTask(
+    timeoutMs = timeoutMs,
+    timeoutLabel = "Firebase custom token sign-in",
+) {
+    signInWithCustomToken(customToken)
+}
+
+private suspend fun awaitAuthTask(
+    timeoutMs: Long,
+    timeoutLabel: String,
+    start: () -> com.google.android.gms.tasks.Task<AuthResult>,
 ): AuthResult = suspendCancellableCoroutine { continuation ->
     val mainHandler = Handler(Looper.getMainLooper())
     var finished = false
@@ -28,7 +49,7 @@ internal suspend fun FirebaseAuth.signInWithEmailAndPasswordAwait(
         if (continuation.isActive) {
             complete {
                 continuation.resumeWithException(
-                    FirebaseTaskTimeoutException("Firebase authentication timed out after ${timeoutMs}ms")
+                    FirebaseTaskTimeoutException("$timeoutLabel timed out after ${timeoutMs}ms")
                 )
             }
         }
@@ -40,29 +61,28 @@ internal suspend fun FirebaseAuth.signInWithEmailAndPasswordAwait(
         mainHandler.removeCallbacks(timeoutRunnable)
     }
 
-    signInWithEmailAndPassword(email, password)
-        .addOnCompleteListener { task ->
-            if (!continuation.isActive) {
-                complete { }
-                return@addOnCompleteListener
-            }
-            if (task.isSuccessful) {
-                val result = task.result
-                if (result != null) {
-                    complete { continuation.resume(result) }
-                } else {
-                    complete {
-                        continuation.resumeWithException(
-                            IllegalStateException("Firebase sign-in did not return a result.")
-                        )
-                    }
-                }
+    start().addOnCompleteListener { task ->
+        if (!continuation.isActive) {
+            complete { }
+            return@addOnCompleteListener
+        }
+        if (task.isSuccessful) {
+            val result = task.result
+            if (result != null) {
+                complete { continuation.resume(result) }
             } else {
                 complete {
                     continuation.resumeWithException(
-                        task.exception ?: IllegalStateException("Firebase sign-in failed.")
+                        IllegalStateException("$timeoutLabel did not return a result.")
                     )
                 }
             }
+        } else {
+            complete {
+                continuation.resumeWithException(
+                    task.exception ?: IllegalStateException("$timeoutLabel failed.")
+                )
+            }
         }
+    }
 }

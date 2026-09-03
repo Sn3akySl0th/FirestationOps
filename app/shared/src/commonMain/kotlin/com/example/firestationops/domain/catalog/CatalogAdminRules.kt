@@ -23,7 +23,9 @@ object CatalogAdminRules {
 
     fun validateApparatusInput(
         input: ApparatusCatalogInput,
-        stations: List<Station>
+        stations: List<Station>,
+        existingApparatus: List<Apparatus> = emptyList(),
+        editingApparatusId: String? = null
     ): String? {
         if (input.name.trim().isBlank()) {
             return "Apparatus name is required."
@@ -36,6 +38,16 @@ object CatalogAdminRules {
         }
         if (stations.none { it.id == input.stationId }) {
             return "Select a valid station."
+        }
+        val barcode = input.barcode?.trim()?.takeIf { it.isNotEmpty() }
+        if (barcode != null) {
+            val duplicate = existingApparatus.any { apparatus ->
+                apparatus.id != editingApparatusId &&
+                    apparatus.barcode?.trim()?.equals(barcode, ignoreCase = true) == true
+            }
+            if (duplicate) {
+                return "Another apparatus already uses this barcode."
+            }
         }
         return null
     }

@@ -2,6 +2,7 @@ package com.example.firestationops.data.firebase
 
 import com.example.firestationops.db.FirestationOpsDatabase
 import com.example.firestationops.domain.auth.AuthSessionRecovery
+import com.example.firestationops.domain.auth.PasswordResetRules
 import com.example.firestationops.domain.bootstrap.DemoDepartmentSeeder
 import com.example.firestationops.domain.bootstrap.DepartmentCatalogProfiles
 import com.example.firestationops.domain.membership.MemberProvisioningRules
@@ -14,10 +15,13 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 
 class FirebaseAuthRepository(
     private val database: FirestationOpsDatabase,
@@ -71,37 +75,49 @@ class FirebaseAuthRepository(
             var stage = LoginStage.AUTH
             try {
                 Log.i(TAG, "login start foregroundActivity=${AndroidFirebaseBootstrap.foregroundActivity() != null}")
-                if (isDebugBuild) {
-                    forceRecaptchaForDebug()
+
+                // Prove email/password against Identity Toolkit first. This bypasses Play Integrity
+                // and fails fast on bad credentials.
+                val restResult = withContext(Dispatchers.IO) {
+                    verifyCredentialsWithRest(normalizedEmail, password)
+                }
+                Log.i(TAG, "rest credential check success uid=${restResult.localId}")
+
+                val customTokenError = withContext(Dispatchers.IO) {
+                    runCatching {
+                        auth.signInWithCustomTokenFromCloudFunction(
+                            email = normalizedEmail,
+                            password = password,
+                            timeoutMs = AUTH_TIMEOUT_MS,
+                        )
+                    }.exceptionOrNull()
                 }
 
-                withContext(Dispatchers.IO) {
-                    runCatching { verifyCredentialsWithRest(normalizedEmail, password) }
-                        .onSuccess { restResult ->
-                            Log.i(TAG, "rest preflight success uid=${restResult.localId}")
-                        }
-                        .onFailure { restError ->
-                            Log.w(TAG, "rest preflight skipped: ${restError::class.simpleName}: ${restError.message}", restError)
-                        }
+                if (customTokenError != null) {
+                    Log.w(TAG, "custom token sign-in failed; trying sdk email/password", customTokenError)
+                    // Do not force reCAPTCHA — that hangs sideloaded debug builds.
+                    runCatching {
+                        auth.signInWithEmailAndPasswordAwait(
+                            email = normalizedEmail,
+                            password = password,
+                            timeoutMs = AUTH_TIMEOUT_MS,
+                        )
+                    }.getOrElse { sdkError ->
+                        Log.e(TAG, "sdk email/password sign-in failed", sdkError)
+                        throw IllegalStateException(
+                            buildString {
+                                append("Cloud sign-in failed after verifying your password. ")
+                                append(
+                                    customTokenError.message?.takeIf { it.isNotBlank() }
+                                        ?: sdkError.message
+                                        ?: "Try again or use offline sign-in."
+                                )
+                            },
+                            sdkError,
+                        )
+                    }
                 }
 
-                val cloudSignedIn = runCatching {
-                    auth.signInWithCustomTokenFromCloudFunction(
-                        email = normalizedEmail,
-                        password = password,
-                        timeoutMs = AUTH_TIMEOUT_MS,
-                    )
-                }.onFailure { cloudError ->
-                    Log.w(TAG, "custom token sign-in failed; trying sdk", cloudError)
-                }.isSuccess
-
-                if (!cloudSignedIn) {
-                    auth.signInWithEmailAndPasswordAwait(
-                        email = normalizedEmail,
-                        password = password,
-                        timeoutMs = AUTH_TIMEOUT_MS,
-                    )
-                }
                 Log.i(TAG, "firebase auth complete uid=${auth.currentUser?.uid}")
                 val firebaseUser = auth.currentUser ?: error("Firebase sign-in did not return a user.")
                 withContext(Dispatchers.IO) {
@@ -113,7 +129,7 @@ class FirebaseAuthRepository(
                 }
                 stage = LoginStage.PROVISION
                 val member = withContext(Dispatchers.IO) {
-                    loadCanonicalMember(firebaseUser.uid)
+                    loadCanonicalMemberOrCache(firebaseUser.uid, normalizedEmail)
                 }
                 Log.i(TAG, "canonical membership loaded uid=${member.id}")
                 MemberProvisioningRules.validateMemberProfile(member)?.let { message ->
@@ -127,6 +143,7 @@ class FirebaseAuthRepository(
                 _userState.value = UserState.Authenticated(member)
                 Result.success(Unit)
             } catch (error: Throwable) {
+                if (error is CancellationException) throw error
                 Log.e(TAG, "login failed during $stage", error)
                 if (auth.currentUser != null && error is FirebaseTaskTimeoutException) {
                     auth.signOut()
@@ -162,6 +179,48 @@ class FirebaseAuthRepository(
         return Result.success(Unit)
     }
 
+    override suspend fun requestPasswordReset(email: String): Result<Unit> {
+        PasswordResetRules.validateEmail(email)?.let {
+            return Result.failure(IllegalArgumentException(it))
+        }
+        if (!firebaseEnabled) {
+            return Result.failure(IllegalStateException(PasswordResetRules.UNAVAILABLE_OFFLINE_MESSAGE))
+        }
+        val normalized = PasswordResetRules.normalizeEmail(email)
+        // Identity Toolkit REST on IO — never block Main with Tasks.await.
+        return withContext(Dispatchers.IO) {
+            try {
+                withTimeout(PASSWORD_RESET_TIMEOUT_MS) {
+                    val apiKey = googleApiKey?.takeIf { it.isNotBlank() }
+                        ?: error(PasswordResetRules.UNAVAILABLE_OFFLINE_MESSAGE)
+                    FirebaseIdentityRestClient.sendPasswordResetEmail(
+                        apiKey = apiKey,
+                        email = normalized,
+                        timeoutMs = PASSWORD_RESET_TIMEOUT_MS.toInt(),
+                    ).recover { error ->
+                        val message = error.message.orEmpty()
+                        if (
+                            message.contains("EMAIL_NOT_FOUND", ignoreCase = true) ||
+                            message.contains("USER_NOT_FOUND", ignoreCase = true)
+                        ) {
+                            Unit
+                        } else {
+                            throw error
+                        }
+                    }
+                }
+            } catch (error: TimeoutCancellationException) {
+                Result.failure(
+                    IllegalStateException("Password reset timed out. Check your connection and try again.")
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                Result.failure(error)
+            }
+        }
+    }
+
     private suspend fun loadCanonicalMember(uid: String): Member {
         val snapshot = firestore.document(FirestorePaths.member(uid))
             .get(Source.SERVER)
@@ -173,9 +232,20 @@ class FirebaseAuthRepository(
             ?: error("Member profile is missing required fields.")
     }
 
-    private fun shouldFallbackToOffline(email: String, error: Throwable): Boolean =
-        error is FirebaseTaskTimeoutException &&
-            database.getMemberByEmail(email) != null
+    private suspend fun loadCanonicalMemberOrCache(uid: String, email: String): Member {
+        return runCatching { loadCanonicalMember(uid) }.getOrElse { serverError ->
+            Log.w(TAG, "server member lookup failed; trying local cache", serverError)
+            database.getMemberById(uid)
+                ?: database.getMemberByEmail(email)?.copy(id = uid)
+                ?: throw serverError
+        }
+    }
+
+    private fun shouldFallbackToOffline(email: String, error: Throwable): Boolean {
+        if (database.getMemberByEmail(email) == null) return false
+        return error is FirebaseTaskTimeoutException ||
+            error.message.orEmpty().contains("Cloud sign-in failed after verifying", ignoreCase = true)
+    }
 
     private fun verifyCredentialsWithRest(email: String, password: String): RestSignInResult {
         val apiKey = googleApiKey?.takeIf { it.isNotBlank() }
@@ -203,21 +273,6 @@ class FirebaseAuthRepository(
         }
     }
 
-    private fun forceRecaptchaForDebug() {
-        runCatching {
-            val settings = auth.firebaseAuthSettings
-            val method = settings.javaClass.getDeclaredMethod(
-                "setForceRecaptchaFlowForTesting",
-                Boolean::class.javaPrimitiveType,
-            )
-            method.isAccessible = true
-            method.invoke(settings, true)
-            Log.i(TAG, "Forced reCAPTCHA flow for debug build")
-        }.onFailure { error ->
-            Log.w(TAG, "Unable to force reCAPTCHA flow for debug build", error)
-        }
-    }
-
     private fun loginErrorMessage(error: Throwable, stage: LoginStage): String {
         if (error is FirebaseTaskTimeoutException) {
             return when (stage) {
@@ -229,14 +284,16 @@ class FirebaseAuthRepository(
         }
         val message = error.message.orEmpty()
         if (message.contains("INVALID_LOGIN_CREDENTIALS", ignoreCase = true) ||
-            message.contains("INVALID_PASSWORD", ignoreCase = true)
+            message.contains("INVALID_PASSWORD", ignoreCase = true) ||
+            message.contains("Incorrect password", ignoreCase = true)
         ) {
             return "Incorrect password."
         }
         if (message.contains("permission-denied", ignoreCase = true) ||
-            message.contains("UNAUTHENTICATED", ignoreCase = true)
+            message.contains("UNAUTHENTICATED", ignoreCase = true) ||
+            message.contains("Active department membership required", ignoreCase = true)
         ) {
-            return "Cloud sign-in rejected the email or password. Reset your password in Firebase Console and try again."
+            return "Cloud sign-in rejected this account. Confirm the member profile is active in Firestore."
         }
         return message.ifBlank { "Sign-in failed." }
     }
@@ -249,6 +306,7 @@ class FirebaseAuthRepository(
     private companion object {
         const val TAG = "FirestationOpsAuth"
         const val AUTH_TIMEOUT_MS = 20_000L
+        const val PASSWORD_RESET_TIMEOUT_MS = 15_000L
         const val PROVISION_TIMEOUT_MS = 20_000L
     }
 }
