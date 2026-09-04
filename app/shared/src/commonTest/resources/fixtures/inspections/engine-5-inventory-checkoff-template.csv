@@ -1,0 +1,159 @@
+category,text,description,expectedQuantity,requiresNoteOnFail
+Cab,Command Radio,,1,true
+Cab,Clipboard With Run Reports,,1,true
+Cab,Accountability Ring,,1,true
+Cab,Door Opener,,1,true
+Cab,ERG,,1,true
+Cab,800 Portable Radio,,1,true
+Cab,UHF Mobile Radio,,1,true
+Cab,Mapbook,,1,true
+Cab,Cab Lift Tool,,1,true
+Cab,Vulcan Flashlights,,2,true
+Cab,Bullard TIC,,1,true
+Cab,Extra TIC Battery,,1,true
+Cab,UHF Portable Radios,,4,true
+Cab,SCBA,,5,true
+Cab,SCBA Masks,,5,true
+Cab,Headlights Low/High,Functional check — operate low and high beams,,true
+Cab,Emergency Lights and Siren,Functional check,,true
+Cab,Parking/Turn/Brake Lights,Functional check,,true
+Cab,Set of Binoculars,,1,true
+Cab,Medical Glove Boxes,,2,true
+Cab,FLIR TIC,,1,true
+Cab,Medical Bag,,1,true
+Cab,Kendrick Extrication Device,,1,true
+Cab,Fuelman Card,,1,true
+Cab,AED,,1,true
+D.S. Pump Panel,1.75 Combination Nozzle,,1,true
+D.S. Pump Panel,2.5 x 1.75 Reducer,,1,true
+D.S. Pump Panel,1.75 Preconnect,,2,true
+D.S. Pump Panel,2.5 Preconnect,,1,true
+D.S. Pump Panel,1.75 Combination Nozzle (spare),,2,true
+D.S. Pump Panel,2.5 Combination Nozzle,,1,true
+D.S. Pump Panel,100ft of 1.75 Doughnut Roll,,1,true
+D.S. Compartment 1,1.75 Combination Nozzle,,2,true
+D.S. Compartment 1,2.5 Combination Nozzle,,1,true
+D.S. Compartment 1,Rubber Mallets,,2,true
+D.S. Compartment 1,Hydrant Wrench,,1,true
+D.S. Compartment 1,LDH Spanner Wrenches,,3,true
+D.S. Compartment 1,Hose Straps,,3,true
+D.S. Compartment 1,Leather Hose Jacket,,1,true
+D.S. Compartment 1,LDH Hose Roller,,1,true
+D.S. Compartment 1,Hose Clamp,,1,true
+D.S. Compartment 1,Jet Siphon,,1,true
+D.S. Compartment 1,Cheater Bar,,1,true
+D.S. Compartment 1,Water Main Tool,,1,true
+D.S. Compartment 1,Athens City Hydrant Wrench,,1,true
+D.S. Compartment 1,Spike,,1,true
+D.S. Compartment 1,Small Foam Jet,,1,true
+D.S. Compartment 1,Set of Stack Tips,,1,true
+D.S. Compartment 1,Foam Inductor,,1,true
+D.S. Compartment 1,2.5 Gate Valve,,1,true
+D.S. Compartment 1,2.5 x 1.75 Gated Wye,,1,true
+D.S. Compartment 1,2.5 x 1.75 Siamese,,1,true
+D.S. Compartment 1,2.5 x 1.0 Reducer,,1,true
+D.S. Compartment 1,2.5 x 1.5 Reducer,,1,true
+D.S. Compartment 1,2.5 Double Female Adapter,,2,true
+D.S. Compartment 1,2.5 Double Male Adapter,,2,true
+D.S. Compartment 1,4.5 Female Storz Adapter,,1,true
+D.S. Compartment 1,4.5 Male Storz Adapter,,1,true
+D.S. Compartment 1,5 x 2.5 Storz Adapter,,1,true
+D.S. Compartment 1,2.5 Storz x 2.5 Male,,1,true
+D.S. Compartment 1,2.5 Storz x 2.5 Female,,1,true
+D.S. Compartment 1,1 x Garden Hose Adapter,,1,true
+D.S. Compartment 1,Foam Wrench,,1,true
+D.S. Compartment 1,1 Supply Hose,,2,true
+D.S. Compartment 1,1.75 Supply Hose,,5,true
+D.S. Compartment 1,2.5 Supply Hose,,1,true
+D.S. Compartment 1,50ft 5 Fill Hose,,1,true
+D.S. Compartment 1,1 Combination Nozzle,,1,true
+D.S. Compartment 1,Forestry Nozzle,,1,true
+D.S. Compartment 1,Spanner Wrenches,,2,true
+D.S. Compartment 2,Dry Chemical Extinguisher,,1,true
+D.S. Compartment 2,Water Extinguisher,,1,true
+D.S. Compartment 2,Smooth Bore Nozzle,,2,true
+D.S. Compartment 2,Rope Throw Bag,,1,true
+D.S. Compartment 2,Rope Bag,,1,true
+D.S. Chute 1,SCBA Bottles,,2,true
+D.S. Chute 2,Wheel Chock,,1,true
+D.S. Compartment 3,Halligan Bar,,1,true
+D.S. Compartment 3,Pick Headed Axe,,2,true
+D.S. Compartment 3,Flat Headed Axe,,2,true
+D.S. Compartment 3,Piercing Nozzle,,1,true
+D.S. Compartment 3,Drywall Hook,,1,true
+D.S. Compartment 3,Large Bolt Cutters,,1,true
+D.S. Compartment 3,Sledge Hammer,,1,true
+D.S. Compartment 3,Gallon of Gas,,1,true
+D.S. Compartment 3,PPV Fan,,1,true
+D.S. Compartment 3,Chainsaw,,1,true
+D.S. Compartment 3,Chainsaw Tool,,2,true
+D.S. Compartment 3,Small Wire Cutter,,1,true
+D.S. Compartment 3,Short D-Handle Pike Pole,,1,true
+D.S. Compartment 3,Funnel,,1,true
+D.S. Compartment 3,K-12,,1,true
+D.S. Compartment 3,Spare K-12 Blade,,1,true
+D.S. Compartment 3,Bar Oil,,1,true
+D.S. Top of Engine,Hard Suction,,1,true
+Rear D.S. Compartment,Dump Tank,,1,true
+Rear Middle Compartment,Bucket of Oil Dry,,2,true
+Rear Middle Compartment,Bucket of Pads and Boom,,1,true
+Rear O.S. Compartment,Cones,,4,true
+Rear O.S. Compartment,LDH Spanner Wrenches,,3,true
+Rear O.S. Compartment,Cooler of Water,,1,true
+Rear O.S. Compartment,Shovel,,1,true
+Rear O.S. Compartment,24ft Extension Ladder,,1,true
+Rear O.S. Compartment,12ft Roof Ladder,,1,true
+Rear O.S. Compartment,14ft Attic Ladder,,1,true
+Rear O.S. Compartment,6ft Pike Pole,,2,true
+Rear O.S. Compartment,9ft Pike Pole,,1,true
+Hosebed,3 Supply Hose,,1,true
+Hosebed,2.5 Clapper Wye,,1,true
+Hosebed,2.5 Supply Hose,,1,true
+Hosebed,500ft 5 Supply Hose,,1,true
+Hosebed,Blue Blitz,,1,true
+O.S. Compartment 3,Box of Triangles,,1,true
+O.S. Compartment 3,Generator,,1,true
+O.S. Compartment 3,Generator Reel,,1,true
+O.S. Compartment 3,Scene Light,,1,true
+O.S. Compartment 3,Extension Cord,,1,true
+O.S. Compartment 3,Roll of Caution Tape,,1,true
+O.S. Compartment 3,Roll of Fire Line Tape,,1,true
+O.S. Compartment 3,Roll of Do Not Enter Tape,,1,true
+O.S. Compartment 3,Can of WD-40/Rag,,1,true
+O.S. Compartment 3,Absorbent Pads,,1,true
+O.S. Compartment 3,Backpack of Forestry Hose,,1,true
+O.S. Compartment 3,Door Bar,,1,true
+O.S. Compartment 2,Medical Bag,,1,true
+O.S. Compartment 2,Boxes of Gloves,,4,true
+O.S. Compartment 2,AED,,1,true
+O.S. Compartment 2,Safety Vest,,5,true
+O.S. Compartment 2,Faceshield,,1,true
+O.S. Compartment 2,First Aid Kit,,1,true
+O.S. Compartment 2,Jump Pads,Presence check — no printed quantity on paper sheet,,true
+O.S. Compartment 2,Bag of Stuffed Animals,Presence check — no printed quantity on paper sheet,,true
+O.S. Chute 2,SCBA Bottles,,2,true
+O.S. Chute 1,SCBA Bottles,,2,true
+O.S. Compartment 1,Boxes of Cribbing,,3,true
+O.S. Compartment 1,Soft Protection,,1,true
+O.S. Compartment 1,Spanner Wrenches,,2,true
+O.S. Compartment 1,Hydrant Wrench,,1,true
+Top of Engine,Scene Lights,,2,true
+Top of Engine,Buckets of Foam,,2,true
+Top of Engine,Low Level Strainer,,1,true
+Top of Engine,Floating Strainer,,1,true
+Top of Engine,Monitor,,1,true
+Top of Engine,Deck Gun,,1,true
+O.S. Running Board,Roll LDH,,1,true
+O.S. Running Board,50ft 3 Hose,,1,true
+Functional Checks,Chainsaw — Does it run?,,,true
+Functional Checks,Chainsaw — Is it full of fuel?,,,true
+Functional Checks,K-12 — Does it run?,,,true
+Functional Checks,K-12 — Is it full of fuel?,,,true
+Functional Checks,Generator — Does it run?,,,true
+Functional Checks,Generator — Is it full of fuel?,,,true
+Functional Checks,800 Radio — Is it charged?,,,true
+Functional Checks,Portable Radios — Are they charged?,,,true
+Functional Checks,Bullard TIC — Is it charged?,,,true
+Functional Checks,FLIR TIC — Is it charged?,,,true
+Functional Checks,PPV Fan — Does it run?,,,true
+Functional Checks,PPV Fan — Is it full of fuel?,,,true

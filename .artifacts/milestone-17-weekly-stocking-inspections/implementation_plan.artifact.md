@@ -4,7 +4,10 @@ Digitize multi-page weekly gear/stocking checklists (tools, hoses, EMS supplies,
 
 ## Status
 
-**Planned** — blocked on a sample department checklist from the field to validate categories, item naming, and quantity rules.
+**Planned** — sample checklist received (Engine 5 Inventory Checkoff). Fixture and acceptance notes unblocking domain/UI work.
+
+**Sample:** `.artifacts/milestone-17-weekly-stocking-inspections/engine-5-sample.md`  
+**CSV fixture:** `app/shared/src/commonTest/resources/fixtures/inspections/engine-5-inventory-checkoff-template.csv` (158 items)
 
 ## Current State (Milestones 1–15)
 
@@ -133,23 +136,23 @@ Backfill **completed** weekly stocking inspections from spreadsheet exports of p
 
 ---
 
-## Sample Checklist Input (pending)
+## Sample Checklist Input (received)
 
-> [!IMPORTANT]
-> A real department sample checklist is required before finalizing category names, item density, and quantity conventions.
+**ENGINE 5 — Inventory Checkoff** (three paper pages). Full capture notes and acceptance checklist:
 
-When provided, capture:
+`.artifacts/milestone-17-weekly-stocking-inspections/engine-5-sample.md`
 
-- Vehicle type and radio name (e.g. Engine 1, Tanker 2).
-- Section names (paper page headers).
-- Approximate line count per section.
-- Which lines use quantity vs. presence-only.
-- Whether “serviceable condition” is separate from “present” (may stay as FAIL + note).
-- Any items marked N/A on specific rigs.
-- Whether past paper sheets record inspector signature, date only, or both (drives `completedAt` / `completedBy` mapping).
-- Typical lookback period to import (e.g. last 90 days vs. full year).
+| Capture item | Value from sample |
+|---|---|
+| Radio name / type | ENGINE 5 / Engine |
+| Section names | Cab, D.S. Pump Panel, D.S./O.S. compartments & chutes, Hosebed, Top of Engine, O.S. Running Board, Functional Checks |
+| Line count | **158** template items (~25 Cab, ~38 D.S. Comp 1, 12 functional checks, …) |
+| Quantity vs presence | Most inventory lines have expected qty; lights + Jump Pads / stuffed animals + functional checks are presence/PASS-FAIL only |
+| Condition vs present | Paper uses X / OUT OF SERVICE / REMOVED → FAIL + deficiency; no separate condition enum in v1 |
+| Header metadata | Inspected by, date, mileage, Oil / Tran / Fuel / Anti / P.S. (inspection-level fields, not CSV rows) |
+| History lookback | TBD with department (paper shows multi-week columns 1–7) |
 
-Store redacted fixtures under `app/shared/src/commonTest/resources/` for template import, history import, and UI tests (fictional item names only).
+Redacted fixture stored under `app/shared/src/commonTest/resources/fixtures/inspections/`.
 
 ---
 
@@ -210,17 +213,20 @@ importGroupKey,apparatusRadioName,templateName,completedAt,completedByEmail,cate
 
 ## Acceptance criteria
 
-- [ ] Admin can import 100+ items from CSV without manual one-by-one entry.
+- [ ] Admin can import 100+ items from CSV without manual one-by-one entry (**Engine 5 fixture = 158**).
 - [ ] Inspection screen groups items by category with section and overall progress.
 - [ ] Items with `expectedQuantity` require `actualQuantity` on submit.
 - [ ] `actualQuantity < expectedQuantity` fails the item and can open a deficiency.
 - [ ] Each apparatus can run a weekly stocking template distinct from its daily check.
 - [ ] Completed inspection retains item text, expected qty, and actual qty at time of completion.
+- [ ] Inspection records optional mileage and fluid readings (Oil, Tran, Fuel, Anti, P.S.).
+- [ ] Functional check lines (run / fuel / charge) use standard PASS/FAIL/N/A without nested item UI.
 - [ ] CSV/PDF export includes quantity columns.
 - [ ] Works fully offline; syncs when connectivity returns.
 - [ ] Officer can import past completed sheets from CSV with preview and duplicate warnings.
 - [ ] Imported inspections are marked `HISTORICAL_IMPORT` and count toward compliance/overdue calculation.
 - [ ] Unmatched apparatus, template, items, or members are surfaced in preview — nothing silently dropped.
+- [ ] Engine 5 sample acceptance checklist in `engine-5-sample.md` passes for the weekly Inventory Checkoff flow.
 
 ---
 
@@ -268,7 +274,9 @@ importGroupKey,apparatusRadioName,templateName,completedAt,completedByEmail,cate
 | Re-importing same sheet creates duplicates | `importGroupKey` + apparatus + date duplicate detection |
 | Inspector on paper is not in member roster | Preview error; officer adds member first or maps email |
 
-**Open until sample received:** exact section names, avg item count, % of lines with qty, whether partial quantities (e.g. 3 of 4) need a distinct severity, how paper sheets record date/signature, and how far back history should be transcribed.
+**Resolved from Engine 5 sample:** section names, ~158 lines, majority qty-based, header fluids/mileage, functional checks as flat items, no fractional inventory in v1.
+
+**Still open:** how far back to transcribe paper history; whether daily ops template coexists on Engine 5; confirm D.S. Comp 1 nozzle lines vs pump-panel nozzles with an officer (kept both as printed).
 
 ---
 
