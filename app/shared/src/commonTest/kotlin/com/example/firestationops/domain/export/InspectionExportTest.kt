@@ -112,8 +112,9 @@ class InspectionCsvExporterTest {
       val csv = InspectionCsvExporter.export(report)
 
       assertContains(csv, "Inspection ID,insp-1")
+      assertContains(csv, "Expected Qty,Actual Qty")
       assertContains(csv, "Engine Oil Level,PASS")
-      assertContains(csv, "Exterior,Lights and Siren,FAIL,REPAIR_NEEDED,Left headlight out")
+      assertContains(csv, "Exterior,Lights and Siren,FAIL,,,REPAIR_NEEDED,Left headlight out")
       assertContains(csv, "Failed: Lights and Siren,REPAIR_NEEDED,Left headlight out")
   }
 

@@ -24,5 +24,7 @@ data class InspectionTemplateItem(
     val description: String? = null,
     val isRequired: Boolean = true,
     val requiresNoteOnFail: Boolean = true,
-    val category: String? = null // e.g., "Engine", "Cab", "Tools"
+    val category: String? = null, // e.g., "Engine", "Cab", "Tools"
+    /** When set, crews must enter [com.example.firestationops.domain.model.InspectionResponse.actualQuantity]. */
+    val expectedQuantity: Int? = null
 )

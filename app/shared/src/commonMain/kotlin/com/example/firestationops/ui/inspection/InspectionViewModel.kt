@@ -2,6 +2,9 @@ package com.example.firestationops.ui.inspection
 
 import com.example.firestationops.currentTimeMillis
 import com.example.firestationops.randomUUID
+import com.example.firestationops.domain.InspectionChecklistSections
+import com.example.firestationops.domain.InspectionValidationRules
+import com.example.firestationops.domain.TemplateAssignmentRules
 import com.example.firestationops.domain.export.InspectionCsvExporter
 import com.example.firestationops.domain.export.InspectionPdfExporter
 import com.example.firestationops.domain.export.InspectionReport
@@ -31,7 +34,15 @@ data class InspectionUiState(
     val inspectionId: String? = null,
     val startedAt: Long? = null,
     val isValid: Boolean = true,
-    val submittedReport: InspectionReport? = null
+    val submittedReport: InspectionReport? = null,
+    val odometerMiles: Int? = null,
+    val fluidOil: String? = null,
+    val fluidTransmission: String? = null,
+    val fluidFuel: String? = null,
+    val fluidAntifreeze: String? = null,
+    val fluidPowerSteering: String? = null,
+    val availableTemplates: List<InspectionTemplate> = emptyList(),
+    val needsTemplateSelection: Boolean = false
 )
 
 class InspectionViewModel(
@@ -43,7 +54,8 @@ class InspectionViewModel(
     private val attachmentRepository: com.example.firestationops.domain.repository.AttachmentRepository,
     private val syncAttachmentCache: SyncAttachmentCache? = null,
     private val syncCoordinator: SyncCoordinator? = null,
-    private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main)
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main),
+    private val initialTemplateId: String? = null
 ) {
     private val _uiState = MutableStateFlow(InspectionUiState())
     val uiState: StateFlow<InspectionUiState> = _uiState.asStateFlow()
@@ -56,53 +68,111 @@ class InspectionViewModel(
         loadData()
     }
 
+    fun selectTemplate(templateId: String) {
+        scope.launch {
+            applyTemplateSelection(templateId = templateId, draft = null)
+        }
+    }
+
     private fun loadData() {
         scope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            
+
             val apparatusResult = apparatusRepository.getApparatus(apparatusId)
             val apparatus = apparatusResult.getOrNull()
-            
+
             if (apparatus == null) {
                 _uiState.update { it.copy(isLoading = false, error = "Apparatus not found") }
                 return@launch
             }
 
-            // Check for existing draft first
-            val draftResult = inspectionRepository.getLatestDraft(apparatusId)
-            val draft = draftResult.getOrNull()
+            val templates = inspectionRepository.getActiveTemplates(member.departmentId).first()
+            val eligible = TemplateAssignmentRules.resolveEligibleTemplates(apparatus, templates)
+            val draft = inspectionRepository.getLatestDraft(apparatusId).getOrNull()
 
-            val templateId = draft?.templateId
-            val templateResult = if (templateId != null) {
-                inspectionRepository.getTemplate(templateId)
+            when {
+                draft != null -> applyTemplateSelection(templateId = draft.templateId, draft = draft, apparatus = apparatus, eligible = eligible)
+                initialTemplateId != null && eligible.any { it.id == initialTemplateId } ->
+                    applyTemplateSelection(templateId = initialTemplateId, draft = null, apparatus = apparatus, eligible = eligible)
+                eligible.size == 1 ->
+                    applyTemplateSelection(templateId = eligible.first().id, draft = null, apparatus = apparatus, eligible = eligible)
+                eligible.isEmpty() ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            apparatus = apparatus,
+                            error = "No active template assigned for ${apparatus.radioName}."
+                        )
+                    }
+                else ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            apparatus = apparatus,
+                            availableTemplates = eligible,
+                            needsTemplateSelection = true,
+                            error = null
+                        )
+                    }
+            }
+        }
+    }
+
+    private suspend fun applyTemplateSelection(
+        templateId: String,
+        draft: Inspection?,
+        apparatus: Apparatus? = _uiState.value.apparatus,
+        eligible: List<InspectionTemplate> = _uiState.value.availableTemplates
+    ) {
+        val resolvedApparatus = apparatus ?: apparatusRepository.getApparatus(apparatusId).getOrNull()
+        if (resolvedApparatus == null) {
+            _uiState.update { it.copy(isLoading = false, error = "Apparatus not found") }
+            return
+        }
+        val templateResult = inspectionRepository.getTemplate(templateId)
+        templateResult.onSuccess { template ->
+            val matchingDraft = draft?.takeIf { it.templateId == template.id }
+            val initialResponses = if (matchingDraft != null) {
+                matchingDraft.responses.associateBy { it.itemId }
             } else {
-                inspectionRepository.getTemplatesByApparatusType(member.departmentId, apparatus.type)
-                    .firstOrNull()
-                    ?.firstOrNull { it.isActive }
-                    ?.let { Result.success(it) } 
-                    ?: Result.failure(Exception("No active template found for ${apparatus.type}"))
+                template.items.associate { item ->
+                    item.id to InspectionResponse(
+                        itemId = item.id,
+                        status = InspectionStatus.PASS,
+                        expectedQuantity = item.expectedQuantity
+                    )
+                }
             }
 
-            templateResult.onSuccess { template ->
-                val initialResponses = if (draft != null) {
-                    draft.responses.associateBy { it.itemId }
-                } else {
-                    template.items.associate { item ->
-                        item.id to InspectionResponse(item.id, InspectionStatus.PASS)
-                    }
-                }
-
-                _uiState.update { it.copy(
-                    isLoading = false, 
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
                     template = template,
-                    apparatus = apparatus,
+                    apparatus = resolvedApparatus,
                     responses = initialResponses,
-                    inspectionId = draft?.id,
-                    startedAt = draft?.startedAt ?: currentTimeMillis(),
-                    isValid = validate(template, initialResponses)
-                ) }
-            }.onFailure { error ->
-                _uiState.update { it.copy(isLoading = false, error = error.message ?: "Failed to load template") }
+                    inspectionId = matchingDraft?.id,
+                    startedAt = matchingDraft?.startedAt ?: currentTimeMillis(),
+                    odometerMiles = matchingDraft?.odometerMiles,
+                    fluidOil = matchingDraft?.fluidOil,
+                    fluidTransmission = matchingDraft?.fluidTransmission,
+                    fluidFuel = matchingDraft?.fluidFuel,
+                    fluidAntifreeze = matchingDraft?.fluidAntifreeze,
+                    fluidPowerSteering = matchingDraft?.fluidPowerSteering,
+                    availableTemplates = eligible.ifEmpty {
+                        listOf(template)
+                    },
+                    needsTemplateSelection = false,
+                    isValid = InspectionValidationRules.isValid(template, initialResponses),
+                    error = null
+                )
+            }
+        }.onFailure { error ->
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    apparatus = resolvedApparatus,
+                    error = error.message ?: "Failed to load template"
+                )
             }
         }
     }
@@ -111,15 +181,73 @@ class InspectionViewModel(
         _uiState.update { state ->
             val newResponses = state.responses.toMutableMap()
             val currentResponse = newResponses[itemId]
+            val item = state.template?.items?.find { it.id == itemId }
             newResponses[itemId] = InspectionResponse(
                 itemId = itemId, 
                 status = status, 
                 note = note, 
                 severity = severity,
-                attachmentIds = attachmentIds ?: currentResponse?.attachmentIds ?: emptyList()
+                attachmentIds = attachmentIds ?: currentResponse?.attachmentIds ?: emptyList(),
+                actualQuantity = currentResponse?.actualQuantity,
+                expectedQuantity = currentResponse?.expectedQuantity ?: item?.expectedQuantity
             )
-            val isValid = validate(state.template, newResponses)
+            val isValid = InspectionValidationRules.isValid(state.template, newResponses)
             state.copy(responses = newResponses, isValid = isValid)
+        }
+        saveDraft()
+    }
+
+    fun updateActualQuantity(itemId: String, actualQuantity: Int) {
+        _uiState.update { state ->
+            val item = state.template?.items?.find { it.id == itemId } ?: return@update state
+            val current = state.responses[itemId] ?: InspectionResponse(
+                itemId = itemId,
+                status = InspectionStatus.PASS,
+                expectedQuantity = item.expectedQuantity
+            )
+            val newResponses = state.responses.toMutableMap()
+            newResponses[itemId] = InspectionValidationRules.withActualQuantity(item, current, actualQuantity)
+            state.copy(
+                responses = newResponses,
+                isValid = InspectionValidationRules.isValid(state.template, newResponses)
+            )
+        }
+        saveDraft()
+    }
+
+    fun updateVehicleStatus(
+        odometerMiles: Int? = _uiState.value.odometerMiles,
+        fluidOil: String? = _uiState.value.fluidOil,
+        fluidTransmission: String? = _uiState.value.fluidTransmission,
+        fluidFuel: String? = _uiState.value.fluidFuel,
+        fluidAntifreeze: String? = _uiState.value.fluidAntifreeze,
+        fluidPowerSteering: String? = _uiState.value.fluidPowerSteering
+    ) {
+        _uiState.update {
+            it.copy(
+                odometerMiles = odometerMiles,
+                fluidOil = fluidOil?.trim()?.takeIf { value -> value.isNotEmpty() },
+                fluidTransmission = fluidTransmission?.trim()?.takeIf { value -> value.isNotEmpty() },
+                fluidFuel = fluidFuel?.trim()?.takeIf { value -> value.isNotEmpty() },
+                fluidAntifreeze = fluidAntifreeze?.trim()?.takeIf { value -> value.isNotEmpty() },
+                fluidPowerSteering = fluidPowerSteering?.trim()?.takeIf { value -> value.isNotEmpty() }
+            )
+        }
+        saveDraft()
+    }
+
+    fun markSectionPresent(category: String) {
+        _uiState.update { state ->
+            val template = state.template ?: return@update state
+            val newResponses = InspectionChecklistSections.markSectionPresent(
+                category = category,
+                items = template.items,
+                responses = state.responses
+            )
+            state.copy(
+                responses = newResponses,
+                isValid = InspectionValidationRules.isValid(template, newResponses)
+            )
         }
         saveDraft()
     }
@@ -167,17 +295,6 @@ class InspectionViewModel(
         }
     }
 
-    private fun validate(template: InspectionTemplate?, responses: Map<String, InspectionResponse>): Boolean {
-        if (template == null) return false
-        return responses.values.none { response ->
-            val item = template.items.find { it.id == response.itemId }
-            response.status == InspectionStatus.FAIL && (
-                (item?.requiresNoteOnFail == true || response.severity == DeficiencySeverity.OUT_OF_SERVICE) && 
-                response.note.isNullOrBlank()
-            )
-        }
-    }
-
     private fun saveDraft() {
         val state = _uiState.value
         val template = state.template ?: return
@@ -199,7 +316,13 @@ class InspectionViewModel(
                     completedAt = null,
                     startedByUserId = member.id,
                     responses = state.responses.values.toList(),
-                    isFinalized = false
+                    isFinalized = false,
+                    odometerMiles = state.odometerMiles,
+                    fluidOil = state.fluidOil,
+                    fluidTransmission = state.fluidTransmission,
+                    fluidFuel = state.fluidFuel,
+                    fluidAntifreeze = state.fluidAntifreeze,
+                    fluidPowerSteering = state.fluidPowerSteering
                 )
             )
             inspectionRepository.saveInspection(inspection)
@@ -212,17 +335,9 @@ class InspectionViewModel(
         val apparatus = state.apparatus ?: return
         val inspectionId = state.inspectionId ?: "insp-${currentTimeMillis()}"
 
-        // Validation
-        val invalidResponses = state.responses.values.filter { response ->
-            val item = template.items.find { it.id == response.itemId }
-            response.status == InspectionStatus.FAIL && (
-                (item?.requiresNoteOnFail == true || response.severity == DeficiencySeverity.OUT_OF_SERVICE) && 
-                response.note.isNullOrBlank()
-            )
-        }
-
-        if (invalidResponses.isNotEmpty()) {
-            _uiState.update { it.copy(error = "Notes are required for failed items.") }
+        val validationError = InspectionValidationRules.validateSubmission(template, state.responses)
+        if (validationError != null) {
+            _uiState.update { it.copy(error = validationError) }
             return
         }
 
@@ -239,7 +354,13 @@ class InspectionViewModel(
                     completedAt = currentTimeMillis(),
                     startedByUserId = member.id,
                     responses = state.responses.values.toList(),
-                    isFinalized = true
+                    isFinalized = true,
+                    odometerMiles = state.odometerMiles,
+                    fluidOil = state.fluidOil,
+                    fluidTransmission = state.fluidTransmission,
+                    fluidFuel = state.fluidFuel,
+                    fluidAntifreeze = state.fluidAntifreeze,
+                    fluidPowerSteering = state.fluidPowerSteering
                 )
             )
 
@@ -256,6 +377,15 @@ class InspectionViewModel(
                     if (severity == DeficiencySeverity.OUT_OF_SERVICE) {
                         marksOutOfService = true
                     }
+                    val quantityNote = if (
+                        response.actualQuantity != null &&
+                        (response.expectedQuantity ?: item?.expectedQuantity) != null
+                    ) {
+                        val expected = response.expectedQuantity ?: item?.expectedQuantity
+                        "Found ${response.actualQuantity} of $expected. "
+                    } else {
+                        ""
+                    }
                     
                     val deficiency = SyncStatusTransitions.deficiencyForSave(
                         Deficiency(
@@ -264,7 +394,7 @@ class InspectionViewModel(
                             apparatusId = apparatusId,
                             departmentId = member.departmentId,
                             title = "Failed: ${item?.text ?: "Unknown item"}",
-                            description = response.note ?: "No note provided",
+                            description = quantityNote + (response.note ?: "No note provided"),
                             severity = severity,
                             status = DeficiencyStatus.OPEN,
                             createdAt = currentTimeMillis(),

@@ -15,6 +15,7 @@ import com.example.firestationops.domain.model.Incident
 import com.example.firestationops.domain.model.IncidentStatus
 import com.example.firestationops.domain.model.IncidentType
 import com.example.firestationops.domain.model.IncidentUnitAssignment
+import com.example.firestationops.domain.model.InspectionEntrySource
 import com.example.firestationops.domain.model.Inspection
 import com.example.firestationops.domain.model.InspectionResponse
 import com.example.firestationops.domain.model.InspectionTemplate
@@ -142,6 +143,7 @@ object FirestoreMappers {
         "vin" to apparatus.vin,
         "licensePlate" to apparatus.licensePlate,
         "barcode" to apparatus.barcode,
+        "assignedTemplateIds" to apparatus.assignedTemplateIds,
         "createdAt" to apparatus.createdAt,
         "updatedAt" to apparatus.updatedAt
     )
@@ -153,6 +155,8 @@ object FirestoreMappers {
         val type = data["type"] as? String ?: return null
         val radioName = data["radioName"] as? String ?: return null
         val statusName = data["status"] as? String ?: ApparatusStatus.IN_SERVICE.name
+        val assignedTemplateIds = (data["assignedTemplateIds"] as? List<*>)?.mapNotNull { it as? String }
+            ?: emptyList()
         return Apparatus(
             id = id,
             departmentId = departmentId,
@@ -167,6 +171,7 @@ object FirestoreMappers {
             vin = data["vin"] as? String,
             licensePlate = data["licensePlate"] as? String,
             barcode = data["barcode"] as? String,
+            assignedTemplateIds = assignedTemplateIds,
             createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,
             updatedAt = (data["updatedAt"] as? Number)?.toLong() ?: 0L
         )
@@ -243,7 +248,16 @@ object FirestoreMappers {
         "isFinalized" to inspection.isFinalized,
         "syncStatus" to SyncStatus.SYNCED.name,
         "voidedAt" to inspection.voidedAt,
-        "voidedReason" to inspection.voidedReason
+        "voidedReason" to inspection.voidedReason,
+        "entrySource" to inspection.entrySource.name,
+        "odometerMiles" to inspection.odometerMiles,
+        "fluidOil" to inspection.fluidOil,
+        "fluidTransmission" to inspection.fluidTransmission,
+        "fluidFuel" to inspection.fluidFuel,
+        "fluidAntifreeze" to inspection.fluidAntifreeze,
+        "fluidPowerSteering" to inspection.fluidPowerSteering,
+        "importedAt" to inspection.importedAt,
+        "importedByUserId" to inspection.importedByUserId
     )
 
     fun inspectionFromMap(id: String, data: Map<String, Any?>): Inspection? {
@@ -256,6 +270,11 @@ object FirestoreMappers {
         val responses = runCatching {
             json.decodeFromString<List<InspectionResponse>>(responsesJson)
         }.getOrDefault(emptyList())
+        val entrySource = runCatching {
+            InspectionEntrySource.valueOf(
+                data["entrySource"] as? String ?: InspectionEntrySource.FIELD.name
+            )
+        }.getOrDefault(InspectionEntrySource.FIELD)
 
         return Inspection(
             id = id,
@@ -269,7 +288,16 @@ object FirestoreMappers {
             isFinalized = data["isFinalized"] as? Boolean ?: false,
             syncStatus = SyncStatus.SYNCED,
             voidedAt = (data["voidedAt"] as? Number)?.toLong(),
-            voidedReason = data["voidedReason"] as? String
+            voidedReason = data["voidedReason"] as? String,
+            entrySource = entrySource,
+            odometerMiles = (data["odometerMiles"] as? Number)?.toInt(),
+            fluidOil = data["fluidOil"] as? String,
+            fluidTransmission = data["fluidTransmission"] as? String,
+            fluidFuel = data["fluidFuel"] as? String,
+            fluidAntifreeze = data["fluidAntifreeze"] as? String,
+            fluidPowerSteering = data["fluidPowerSteering"] as? String,
+            importedAt = (data["importedAt"] as? Number)?.toLong(),
+            importedByUserId = data["importedByUserId"] as? String
         )
     }
 

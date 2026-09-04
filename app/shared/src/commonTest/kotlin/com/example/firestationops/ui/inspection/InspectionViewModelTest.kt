@@ -169,6 +169,149 @@ class InspectionViewModelTest {
         finishViewModelTest()
     }
 
+    @Test
+    fun `updateActualQuantity short count requires note before submit`() = runTest {
+        inspectionRepository.setTemplates(
+            listOf(
+                InspectionTemplate(
+                    id = "tmpl-stocking",
+                    departmentId = "mock-dept-id",
+                    name = "Weekly Inventory Checkoff",
+                    apparatusType = "Engine",
+                    frequencyHours = 168,
+                    items = listOf(
+                        InspectionTemplateItem(
+                            id = "gloves",
+                            text = "Boxes of Gloves",
+                            category = "O.S. Compartment 2",
+                            expectedQuantity = 4
+                        )
+                    )
+                )
+            )
+        )
+
+        val viewModel = createViewModel()
+        viewModel.uiState.first { !it.isLoading }
+
+        viewModel.updateActualQuantity("gloves", 2)
+        assertEquals(InspectionStatus.FAIL, viewModel.uiState.value.responses["gloves"]?.status)
+        assertFalse(viewModel.uiState.value.isValid)
+
+        viewModel.submit()
+        awaitViewModelWork()
+        assertEquals("Notes are required for failed items.", viewModel.uiState.value.error)
+
+        viewModel.updateResponse("gloves", InspectionStatus.FAIL, note = "Two boxes missing")
+        assertTrue(viewModel.uiState.value.isValid)
+        viewModel.submit()
+        viewModel.uiState.first { it.isSuccess }
+        finishViewModelTest()
+    }
+
+    @Test
+    fun `updateVehicleStatus persists mileage and fluids on draft`() = runTest {
+        val viewModel = createViewModel()
+        viewModel.uiState.first { !it.isLoading }
+
+        viewModel.updateVehicleStatus(
+            odometerMiles = 28202,
+            fluidOil = "F",
+            fluidFuel = "3/4"
+        )
+        awaitViewModelWork()
+
+        val draft = checkNotNull(inspectionRepository.getLatestDraft("ap-1").getOrNull())
+        assertEquals(28202, draft.odometerMiles)
+        assertEquals("F", draft.fluidOil)
+        assertEquals("3/4", draft.fluidFuel)
+        finishViewModelTest()
+    }
+
+    @Test
+    fun `markSectionPresent fills quantities for section`() = runTest {
+        inspectionRepository.setTemplates(
+            listOf(
+                InspectionTemplate(
+                    id = "tmpl-stocking",
+                    departmentId = "mock-dept-id",
+                    name = "Weekly Inventory Checkoff",
+                    apparatusType = "Engine",
+                    frequencyHours = 168,
+                    items = listOf(
+                        InspectionTemplateItem(
+                            id = "gloves",
+                            text = "Boxes of Gloves",
+                            category = "O.S. Compartment 2",
+                            expectedQuantity = 4
+                        ),
+                        InspectionTemplateItem(
+                            id = "aed",
+                            text = "AED",
+                            category = "O.S. Compartment 2",
+                            expectedQuantity = 1
+                        )
+                    )
+                )
+            )
+        )
+
+        val viewModel = createViewModel()
+        viewModel.uiState.first { !it.isLoading }
+
+        viewModel.markSectionPresent("O.S. Compartment 2")
+        awaitViewModelWork()
+
+        assertEquals(4, viewModel.uiState.value.responses["gloves"]?.actualQuantity)
+        assertEquals(1, viewModel.uiState.value.responses["aed"]?.actualQuantity)
+        assertTrue(viewModel.uiState.value.isValid)
+        finishViewModelTest()
+    }
+
+    @Test
+    fun `multiple assigned templates require selection`() = runTest {
+        inspectionRepository.setTemplates(
+            listOf(
+                InspectionTemplate(
+                    id = "tmpl-daily",
+                    departmentId = "mock-dept-id",
+                    name = "Daily Engine Inspection",
+                    apparatusType = "Engine",
+                    frequencyHours = 24,
+                    items = listOf(InspectionTemplateItem(id = "oil", text = "Oil"))
+                ),
+                InspectionTemplate(
+                    id = "tmpl-weekly",
+                    departmentId = "mock-dept-id",
+                    name = "Weekly Inventory Checkoff",
+                    apparatusType = "Engine",
+                    frequencyHours = 168,
+                    items = listOf(
+                        InspectionTemplateItem(
+                            id = "gloves",
+                            text = "Boxes of Gloves",
+                            expectedQuantity = 4
+                        )
+                    )
+                )
+            )
+        )
+        // Seed apparatus with assignments via mock apparatus repo if possible — MockApparatusRepository
+        // returns fixed apparatus without assignments; selection falls back to all Engine templates.
+        val viewModel = createViewModel()
+        viewModel.uiState.first { !it.isLoading }
+
+        assertTrue(viewModel.uiState.value.needsTemplateSelection)
+        assertEquals(2, viewModel.uiState.value.availableTemplates.size)
+
+        viewModel.selectTemplate("tmpl-weekly")
+        viewModel.uiState.first { it.template != null }
+
+        assertEquals("tmpl-weekly", viewModel.uiState.value.template?.id)
+        assertFalse(viewModel.uiState.value.needsTemplateSelection)
+        finishViewModelTest()
+    }
+
     private fun TestScope.createViewModel(): InspectionViewModel =
         InspectionViewModel(
             apparatusId = "ap-1",

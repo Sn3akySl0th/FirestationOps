@@ -152,6 +152,40 @@ class InspectionComplianceCalculatorTest {
         assertNull(result)
     }
 
+    @Test
+    fun calculateForDepartment_emitsStatusPerAssignedTemplate() {
+        val weekly = engineTemplate.copy(
+            id = "tmpl-weekly",
+            name = "Weekly Inventory",
+            frequencyHours = 168
+        )
+        val now = 200_000_000L
+        val statuses = InspectionComplianceCalculator.calculateForDepartment(
+            apparatusList = listOf(
+                engine.copy(assignedTemplateIds = listOf(engineTemplate.id, weekly.id))
+            ),
+            templates = listOf(engineTemplate, weekly),
+            inspections = listOf(
+                finalizedInspection(now - (50 * 3_600_000L)).copy(templateId = engineTemplate.id)
+            ),
+            nowMillis = now
+        )
+
+        assertEquals(2, statuses.size)
+        assertEquals(
+            InspectionComplianceStatus.OVERDUE,
+            statuses.first { it.templateId == engineTemplate.id }.status
+        )
+        assertEquals(
+            InspectionComplianceStatus.NEVER_INSPECTED,
+            statuses.first { it.templateId == weekly.id }.status
+        )
+        assertEquals(
+            InspectionComplianceStatus.OVERDUE,
+            InspectionComplianceCalculator.worstStatus(statuses)?.status
+        )
+    }
+
     private fun finalizedInspection(completedAt: Long): Inspection =
         Inspection(
             id = "insp-1",

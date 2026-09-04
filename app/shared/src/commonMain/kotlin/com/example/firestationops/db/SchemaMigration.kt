@@ -32,8 +32,49 @@ internal object SchemaMigration {
             parameters = 0
         )
         ensureInspectionVoidColumns(driver)
+        ensureInspectionStockingColumns(driver)
         ensureAttachmentFailureColumns(driver)
         ensureApparatusIdentityColumns(driver)
+        ensureApparatusAssignedTemplatesColumn(driver)
+    }
+
+    private fun ensureApparatusAssignedTemplatesColumn(driver: SqlDriver) {
+        runCatching {
+            driver.execute(
+                identifier = null,
+                sql = "ALTER TABLE ApparatusEntity ADD COLUMN assignedTemplateIdsJson TEXT NOT NULL DEFAULT '[]';",
+                parameters = 0
+            )
+        }
+        runCatching {
+            driver.execute(
+                identifier = null,
+                sql = "ALTER TABLE ApparatusEntity ADD COLUMN assignedTemplateIdsJson TEXT;",
+                parameters = 0
+            )
+        }
+    }
+
+    private fun ensureInspectionStockingColumns(driver: SqlDriver) {
+        listOf(
+            "entrySource TEXT",
+            "odometerMiles INTEGER",
+            "fluidOil TEXT",
+            "fluidTransmission TEXT",
+            "fluidFuel TEXT",
+            "fluidAntifreeze TEXT",
+            "fluidPowerSteering TEXT",
+            "importedAt INTEGER",
+            "importedByUserId TEXT"
+        ).forEach { column ->
+            runCatching {
+                driver.execute(
+                    identifier = null,
+                    sql = "ALTER TABLE InspectionEntity ADD COLUMN $column;",
+                    parameters = 0
+                )
+            }
+        }
     }
 
     private fun ensureApparatusIdentityColumns(driver: SqlDriver) {

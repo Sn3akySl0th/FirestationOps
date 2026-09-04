@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -38,6 +39,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +48,9 @@ import com.example.firestationops.domain.model.Apparatus
 import com.example.firestationops.domain.model.ApparatusStatus
 import com.example.firestationops.domain.model.InspectionTemplate
 import com.example.firestationops.domain.model.Station
-
+import com.example.firestationops.platform.TextImportResult
+import com.example.firestationops.platform.rememberFileImporter
+import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CatalogSettingsScreen(
@@ -58,7 +62,11 @@ fun CatalogSettingsScreen(
     val stationEditor by viewModel.stationEditor.collectAsState()
     val apparatusEditor by viewModel.apparatusEditor.collectAsState()
     val templateEditor by viewModel.templateEditor.collectAsState()
+    val templateCsvImport by viewModel.templateCsvImport.collectAsState()
+    val historyCsvImport by viewModel.historyCsvImport.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val fileImporter = rememberFileImporter()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(actionMessage) {
         actionMessage?.let { message ->
@@ -197,13 +205,22 @@ fun CatalogSettingsScreen(
                                 SectionHeader(
                                     title = "Inspection templates",
                                     canManage = state.canManageCatalog,
-                                    onAdd = viewModel::openNewTemplateEditor
+                                    onAdd = viewModel::openNewTemplateEditor,
+                                    secondaryActionLabel = "Import CSV",
+                                    onSecondaryAction = { viewModel.openTemplateCsvImport(replaceOpenEditorItems = false) }
                                 )
+                            }
+                            if (state.canManageCatalog) {
+                                item {
+                                    TextButton(onClick = viewModel::openHistoryCsvImport) {
+                                        Text("Import inspection history")
+                                    }
+                                }
                             }
                             if (state.templates.isEmpty()) {
                                 item {
                                     Text(
-                                        "No templates yet. Add a template to define inspection checklists.",
+                                        "No templates yet. Add a template or import a checklist CSV.",
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                 }
@@ -243,10 +260,14 @@ fun CatalogSettingsScreen(
     }
 
     apparatusEditor?.let { editor ->
-        val stations = (uiState as? CatalogSettingsUiState.Success)?.stations.orEmpty()
+        val successState = uiState as? CatalogSettingsUiState.Success
+        val stations = successState?.stations.orEmpty()
+        val templatesForType = successState?.templates.orEmpty()
+            .filter { it.isActive && it.apparatusType.equals(editor.type, ignoreCase = true) }
         ApparatusEditorDialog(
             editor = editor,
             stations = stations,
+            assignableTemplates = templatesForType,
             onDismiss = viewModel::closeApparatusEditor,
             onSave = viewModel::saveApparatusEditor,
             onStationChange = viewModel::updateApparatusStationId,
@@ -256,7 +277,8 @@ fun CatalogSettingsScreen(
             onVinChange = viewModel::updateApparatusVin,
             onLicensePlateChange = viewModel::updateApparatusLicensePlate,
             onBarcodeChange = viewModel::updateApparatusBarcode,
-            onStatusChange = viewModel::updateApparatusStatus
+            onStatusChange = viewModel::updateApparatusStatus,
+            onToggleAssignedTemplate = viewModel::toggleApparatusAssignedTemplate
         )
     }
 
@@ -272,7 +294,55 @@ fun CatalogSettingsScreen(
             onActiveChange = viewModel::updateTemplateActive,
             onItemTextChange = viewModel::updateTemplateItemText,
             onAddItem = viewModel::addTemplateItem,
-            onRemoveItem = viewModel::removeTemplateItem
+            onRemoveItem = viewModel::removeTemplateItem,
+            onImportCsv = { viewModel.openTemplateCsvImport(replaceOpenEditorItems = true) }
+        )
+    }
+
+    templateCsvImport?.let { importState ->
+        TemplateCsvImportDialog(
+            state = importState,
+            onDismiss = viewModel::closeTemplateCsvImport,
+            onCsvTextChange = viewModel::updateTemplateCsvText,
+            onPreview = viewModel::previewTemplateCsv,
+            onApply = viewModel::applyTemplateCsvImport,
+            onPickFile = {
+                scope.launch {
+                    when (val result = fileImporter.pickTextFile()) {
+                        is TextImportResult.Success -> {
+                            viewModel.setTemplateCsvFromFile(result.content, result.fileName)
+                        }
+                        is TextImportResult.Error -> {
+                            snackbarHostState.showSnackbar(result.message)
+                        }
+                        TextImportResult.Cancelled -> Unit
+                    }
+                }
+            }
+        )
+    }
+
+    historyCsvImport?.let { importState ->
+        HistoryCsvImportDialog(
+            state = importState,
+            onDismiss = viewModel::closeHistoryCsvImport,
+            onCsvTextChange = viewModel::updateHistoryCsvText,
+            onPreview = viewModel::previewHistoryCsv,
+            onApply = viewModel::applyHistoryCsvImport,
+            onKeepLocalOnlyChange = viewModel::updateHistoryKeepLocalOnly,
+            onPickFile = {
+                scope.launch {
+                    when (val result = fileImporter.pickTextFile()) {
+                        is TextImportResult.Success -> {
+                            viewModel.setHistoryCsvFromFile(result.content, result.fileName)
+                        }
+                        is TextImportResult.Error -> {
+                            snackbarHostState.showSnackbar(result.message)
+                        }
+                        TextImportResult.Cancelled -> Unit
+                    }
+                }
+            }
         )
     }
 }
@@ -281,7 +351,9 @@ fun CatalogSettingsScreen(
 private fun SectionHeader(
     title: String,
     canManage: Boolean,
-    onAdd: () -> Unit
+    onAdd: () -> Unit,
+    secondaryActionLabel: String? = null,
+    onSecondaryAction: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -290,8 +362,15 @@ private fun SectionHeader(
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         if (canManage) {
-            TextButton(onClick = onAdd) {
-                Text("Add")
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (secondaryActionLabel != null && onSecondaryAction != null) {
+                    TextButton(onClick = onSecondaryAction) {
+                        Text(secondaryActionLabel)
+                    }
+                }
+                TextButton(onClick = onAdd) {
+                    Text("Add")
+                }
             }
         }
     }
@@ -426,6 +505,7 @@ private fun StationEditorDialog(
 private fun ApparatusEditorDialog(
     editor: ApparatusEditorState,
     stations: List<Station>,
+    assignableTemplates: List<InspectionTemplate>,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
     onStationChange: (String) -> Unit,
@@ -435,7 +515,8 @@ private fun ApparatusEditorDialog(
     onVinChange: (String) -> Unit,
     onLicensePlateChange: (String) -> Unit,
     onBarcodeChange: (String) -> Unit,
-    onStatusChange: (ApparatusStatus) -> Unit
+    onStatusChange: (ApparatusStatus) -> Unit,
+    onToggleAssignedTemplate: (String) -> Unit
 ) {
     var stationMenuExpanded by remember { mutableStateOf(false) }
     val selectedStation = stations.find { it.id == editor.stationId }
@@ -532,6 +613,30 @@ private fun ApparatusEditorDialog(
                         )
                     }
                 }
+                Text("Assigned inspection templates", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    "Leave empty to use every active template for this type. Select specific checklists (daily + weekly) when both apply.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                if (assignableTemplates.isEmpty()) {
+                    Text(
+                        "No active templates for type \"${editor.type.ifBlank { "…" }}\".",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        assignableTemplates.forEach { template ->
+                            FilterChip(
+                                selected = template.id in editor.assignedTemplateIds,
+                                onClick = { onToggleAssignedTemplate(template.id) },
+                                label = {
+                                    Text("${template.name} (${template.frequencyHours}h)")
+                                },
+                                enabled = !editor.isSaving
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -563,7 +668,8 @@ private fun TemplateEditorDialog(
     onActiveChange: (Boolean) -> Unit,
     onItemTextChange: (Int, String) -> Unit,
     onAddItem: () -> Unit,
-    onRemoveItem: (Int) -> Unit
+    onRemoveItem: (Int) -> Unit,
+    onImportCsv: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -621,31 +727,50 @@ private fun TemplateEditorDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Checklist items", style = MaterialTheme.typography.labelLarge)
-                    TextButton(onClick = onAddItem, enabled = !editor.isSaving) {
-                        Text("Add item")
+                    Text("Checklist items (${editor.items.size})", style = MaterialTheme.typography.labelLarge)
+                    Row {
+                        TextButton(onClick = onImportCsv, enabled = !editor.isSaving) {
+                            Text("Import CSV")
+                        }
+                        TextButton(onClick = onAddItem, enabled = !editor.isSaving) {
+                            Text("Add item")
+                        }
                     }
                 }
                 editor.items.forEachIndexed { index, item ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = item.text,
-                            onValueChange = { onItemTextChange(index, it) },
-                            label = { Text("Item ${index + 1}") },
-                            modifier = Modifier.weight(1f),
-                            enabled = !editor.isSaving
-                        )
-                        if (editor.items.size > 1) {
-                            TextButton(
-                                onClick = { onRemoveItem(index) },
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = item.text,
+                                onValueChange = { onItemTextChange(index, it) },
+                                label = { Text("Item ${index + 1}") },
+                                modifier = Modifier.weight(1f),
                                 enabled = !editor.isSaving
-                            ) {
-                                Text("Remove")
+                            )
+                            if (editor.items.size > 1) {
+                                TextButton(
+                                    onClick = { onRemoveItem(index) },
+                                    enabled = !editor.isSaving
+                                ) {
+                                    Text("Remove")
+                                }
                             }
+                        }
+                        val meta = buildList {
+                            item.category?.takeIf { it.isNotBlank() }?.let { add(it) }
+                            item.expectedQuantity?.let { add("qty $it") }
+                        }.joinToString(" · ")
+                        if (meta.isNotEmpty()) {
+                            Text(
+                                meta,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                            )
                         }
                     }
                 }
@@ -662,6 +787,186 @@ private fun TemplateEditorDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss, enabled = !editor.isSaving) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun TemplateCsvImportDialog(
+    state: TemplateCsvImportState,
+    onDismiss: () -> Unit,
+    onCsvTextChange: (String) -> Unit,
+    onPreview: () -> Unit,
+    onApply: () -> Unit,
+    onPickFile: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                if (state.replaceOpenEditorItems) {
+                    "Import checklist CSV"
+                } else {
+                    "Import template from CSV"
+                }
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    "Columns: category, text, description, expectedQuantity, requiresNoteOnFail",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                TextButton(onClick = onPickFile) {
+                    Text("Choose file")
+                }
+                state.fileName?.let { name ->
+                    Text("Selected: $name", style = MaterialTheme.typography.labelMedium)
+                }
+                OutlinedTextField(
+                    value = state.csvText,
+                    onValueChange = onCsvTextChange,
+                    label = { Text("Paste CSV") },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp),
+                    minLines = 8
+                )
+                state.error?.let { error ->
+                    Text(error, color = MaterialTheme.colorScheme.error)
+                }
+                state.preview?.let { preview ->
+                    Text(preview.summary, style = MaterialTheme.typography.bodyMedium)
+                    preview.warnings.take(5).forEach { warning ->
+                        Text(warning, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (preview.warnings.size > 5) {
+                        Text(
+                            "+${preview.warnings.size - 5} more warning(s)",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onPreview, enabled = state.csvText.isNotBlank()) {
+                    Text("Preview")
+                }
+                Button(
+                    onClick = onApply,
+                    enabled = state.csvText.isNotBlank() && state.error == null
+                ) {
+                    Text(if (state.replaceOpenEditorItems) "Replace items" else "Continue")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun HistoryCsvImportDialog(
+    state: HistoryCsvImportState,
+    onDismiss: () -> Unit,
+    onCsvTextChange: (String) -> Unit,
+    onPreview: () -> Unit,
+    onApply: () -> Unit,
+    onKeepLocalOnlyChange: (Boolean) -> Unit,
+    onPickFile: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { if (!state.isImporting) onDismiss() },
+        title = { Text("Import inspection history") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    "Long-format CSV: importGroupKey, apparatusRadioName, templateName, completedAt, completedByEmail, category, itemText, status, actualQuantity, note",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                TextButton(onClick = onPickFile, enabled = !state.isImporting) {
+                    Text("Choose file")
+                }
+                state.fileName?.let { name ->
+                    Text("Selected: $name", style = MaterialTheme.typography.labelMedium)
+                }
+                OutlinedTextField(
+                    value = state.csvText,
+                    onValueChange = onCsvTextChange,
+                    label = { Text("Paste history CSV") },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp),
+                    minLines = 8,
+                    enabled = !state.isImporting
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Keep local archive only")
+                    Switch(
+                        checked = state.keepLocalOnly,
+                        onCheckedChange = onKeepLocalOnlyChange,
+                        enabled = !state.isImporting
+                    )
+                }
+                state.error?.let { error ->
+                    Text(error, color = MaterialTheme.colorScheme.error)
+                }
+                state.preview?.let { preview ->
+                    Text(preview.summary, style = MaterialTheme.typography.bodyMedium)
+                    preview.inspections.take(5).forEach { inspection ->
+                        val label = buildString {
+                            append(inspection.importGroupKey)
+                            append(": ")
+                            if (inspection.canImport) append("ready") else append(inspection.errors.firstOrNull() ?: "blocked")
+                        }
+                        Text(label, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (preview.inspections.size > 5) {
+                        Text(
+                            "+${preview.inspections.size - 5} more group(s)",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    onClick = onPreview,
+                    enabled = state.csvText.isNotBlank() && !state.isImporting
+                ) {
+                    Text("Preview")
+                }
+                Button(
+                    onClick = onApply,
+                    enabled = state.csvText.isNotBlank() &&
+                        !state.isImporting &&
+                        (state.preview?.importableCount ?: 0) > 0
+                ) {
+                    if (state.isImporting) {
+                        CircularProgressIndicator(modifier = Modifier.padding(4.dp))
+                    } else {
+                        Text("Import ${state.preview?.importableCount ?: 0}")
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !state.isImporting) {
                 Text("Cancel")
             }
         }

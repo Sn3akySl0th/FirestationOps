@@ -44,6 +44,10 @@ class MockInspectionRepository : InspectionRepository {
 
     private val inspections = MutableStateFlow<List<Inspection>>(emptyList())
 
+    fun setTemplates(value: List<InspectionTemplate>) {
+        templates.value = value
+    }
+
     override fun getActiveTemplates(departmentId: String): Flow<List<InspectionTemplate>> = 
         templates.map { list -> list.filter { it.isActive } }
 

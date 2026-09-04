@@ -152,7 +152,9 @@ class DashboardViewModel(
             inspections = inspections,
             nowMillis = nowMillis()
         )
-        val complianceByApparatus = complianceStatuses.associateBy { it.apparatusId }
+        val complianceByApparatus = complianceStatuses
+            .groupBy { it.apparatusId }
+            .mapValues { (_, statuses) -> InspectionComplianceCalculator.worstStatus(statuses) }
 
         val overdueInspections = complianceStatuses
             .filter {

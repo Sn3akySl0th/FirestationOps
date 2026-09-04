@@ -24,7 +24,9 @@ data class InspectionReportItem(
     val text: String,
     val status: InspectionStatus,
     val note: String?,
-    val severity: DeficiencySeverity?
+    val severity: DeficiencySeverity?,
+    val expectedQuantity: Int? = null,
+    val actualQuantity: Int? = null
 )
 
 data class InspectionReportDeficiency(
@@ -49,7 +51,9 @@ object InspectionReportBuilder {
                 text = item.text,
                 status = response?.status ?: InspectionStatus.NOT_APPLICABLE,
                 note = response?.note,
-                severity = response?.severity
+                severity = response?.severity,
+                expectedQuantity = response?.expectedQuantity ?: item.expectedQuantity,
+                actualQuantity = response?.actualQuantity
             )
         }
 

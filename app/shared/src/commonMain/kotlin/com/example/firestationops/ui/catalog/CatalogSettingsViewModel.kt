@@ -2,9 +2,12 @@ package com.example.firestationops.ui.catalog
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.firestationops.currentTimeMillis
 import com.example.firestationops.domain.catalog.ApparatusCatalogInput
+import com.example.firestationops.domain.catalog.HistoricalInspectionCsvImporter
 import com.example.firestationops.domain.catalog.StationCatalogInput
 import com.example.firestationops.domain.catalog.TemplateCatalogInput
+import com.example.firestationops.domain.catalog.TemplateCsvImporter
 import com.example.firestationops.domain.catalog.TemplateItemCatalogInput
 import com.example.firestationops.domain.model.Apparatus
 import com.example.firestationops.domain.model.ApparatusStatus
@@ -14,6 +17,7 @@ import com.example.firestationops.domain.model.Role
 import com.example.firestationops.domain.model.Station
 import com.example.firestationops.domain.repository.ApparatusRepository
 import com.example.firestationops.domain.repository.CatalogAdminRepository
+import com.example.firestationops.domain.repository.DepartmentRepository
 import com.example.firestationops.domain.repository.InspectionRepository
 import com.example.firestationops.domain.sync.SyncCoordinator
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +25,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -59,6 +64,7 @@ data class ApparatusEditorState(
     val licensePlate: String = "",
     val barcode: String = "",
     val status: ApparatusStatus = ApparatusStatus.IN_SERVICE,
+    val assignedTemplateIds: List<String> = emptyList(),
     val isSaving: Boolean = false
 )
 
@@ -73,12 +79,31 @@ data class TemplateEditorState(
     val isSaving: Boolean = false
 )
 
+data class TemplateCsvImportState(
+    val csvText: String = "",
+    val fileName: String? = null,
+    val preview: TemplateCsvImporter.Preview? = null,
+    val error: String? = null,
+    /** When true, replace items in the open template editor; otherwise open a new editor. */
+    val replaceOpenEditorItems: Boolean = false
+)
+
+data class HistoryCsvImportState(
+    val csvText: String = "",
+    val fileName: String? = null,
+    val preview: HistoricalInspectionCsvImporter.Preview? = null,
+    val error: String? = null,
+    val keepLocalOnly: Boolean = false,
+    val isImporting: Boolean = false
+)
+
 class CatalogSettingsViewModel(
     private val member: Member,
     private val apparatusRepository: ApparatusRepository,
     private val inspectionRepository: InspectionRepository,
     private val catalogAdminRepository: CatalogAdminRepository,
-    private val syncCoordinator: SyncCoordinator
+    private val syncCoordinator: SyncCoordinator,
+    private val departmentRepository: DepartmentRepository
 ) : ViewModel() {
     private val departmentId = member.departmentId
     private val cloudSyncEnabled = syncCoordinator.isAvailable()
@@ -95,6 +120,12 @@ class CatalogSettingsViewModel(
 
     private val _templateEditor = MutableStateFlow<TemplateEditorState?>(null)
     val templateEditor: StateFlow<TemplateEditorState?> = _templateEditor.asStateFlow()
+
+    private val _templateCsvImport = MutableStateFlow<TemplateCsvImportState?>(null)
+    val templateCsvImport: StateFlow<TemplateCsvImportState?> = _templateCsvImport.asStateFlow()
+
+    private val _historyCsvImport = MutableStateFlow<HistoryCsvImportState?>(null)
+    val historyCsvImport: StateFlow<HistoryCsvImportState?> = _historyCsvImport.asStateFlow()
 
     val uiState: StateFlow<CatalogSettingsUiState> = combine(
         apparatusRepository.getStations(departmentId),
@@ -189,7 +220,8 @@ class CatalogSettingsViewModel(
             vin = apparatus.vin.orEmpty(),
             licensePlate = apparatus.licensePlate.orEmpty(),
             barcode = apparatus.barcode.orEmpty(),
-            status = apparatus.status
+            status = apparatus.status,
+            assignedTemplateIds = apparatus.assignedTemplateIds
         )
     }
 
@@ -229,6 +261,17 @@ class CatalogSettingsViewModel(
         _apparatusEditor.value = _apparatusEditor.value?.copy(status = value)
     }
 
+    fun toggleApparatusAssignedTemplate(templateId: String) {
+        val editor = _apparatusEditor.value ?: return
+        val current = editor.assignedTemplateIds.toMutableList()
+        if (current.contains(templateId)) {
+            current.remove(templateId)
+        } else {
+            current.add(templateId)
+        }
+        _apparatusEditor.value = editor.copy(assignedTemplateIds = current)
+    }
+
     fun saveApparatusEditor() {
         val editor = _apparatusEditor.value ?: return
         viewModelScope.launch {
@@ -243,7 +286,8 @@ class CatalogSettingsViewModel(
                     status = editor.status,
                     vin = editor.vin,
                     licensePlate = editor.licensePlate,
-                    barcode = editor.barcode
+                    barcode = editor.barcode,
+                    assignedTemplateIds = editor.assignedTemplateIds
                 ),
                 editingApparatusId = editor.apparatusId
             )
@@ -276,9 +320,11 @@ class CatalogSettingsViewModel(
                 TemplateItemCatalogInput(
                     id = it.id,
                     text = it.text,
+                    description = it.description,
                     category = it.category,
                     isRequired = it.isRequired,
-                    requiresNoteOnFail = it.requiresNoteOnFail
+                    requiresNoteOnFail = it.requiresNoteOnFail,
+                    expectedQuantity = it.expectedQuantity
                 )
             }.ifEmpty { listOf(TemplateItemCatalogInput(text = "")) }
         )
@@ -328,6 +374,171 @@ class CatalogSettingsViewModel(
         val editor = _templateEditor.value ?: return
         if (editor.items.size <= 1) return
         _templateEditor.value = editor.copy(items = editor.items.filterIndexed { i, _ -> i != index })
+    }
+
+    fun openTemplateCsvImport(replaceOpenEditorItems: Boolean = false) {
+        _templateCsvImport.value = TemplateCsvImportState(
+            replaceOpenEditorItems = replaceOpenEditorItems
+        )
+    }
+
+    fun closeTemplateCsvImport() {
+        _templateCsvImport.value = null
+    }
+
+    fun updateTemplateCsvText(value: String) {
+        _templateCsvImport.value = _templateCsvImport.value?.copy(
+            csvText = value,
+            preview = null,
+            error = null
+        )
+    }
+
+    fun setTemplateCsvFromFile(content: String, fileName: String?) {
+        val current = _templateCsvImport.value ?: TemplateCsvImportState()
+        _templateCsvImport.value = current.copy(
+            csvText = content,
+            fileName = fileName,
+            preview = null,
+            error = null
+        )
+        previewTemplateCsv()
+    }
+
+    fun previewTemplateCsv() {
+        val state = _templateCsvImport.value ?: return
+        when (val result = TemplateCsvImporter.parse(state.csvText)) {
+            is TemplateCsvImporter.Result.Success -> {
+                _templateCsvImport.value = state.copy(preview = result.preview, error = null)
+            }
+            is TemplateCsvImporter.Result.Failure -> {
+                _templateCsvImport.value = state.copy(preview = null, error = result.message)
+            }
+        }
+    }
+
+    fun applyTemplateCsvImport() {
+        val state = _templateCsvImport.value ?: return
+        val preview = state.preview ?: run {
+            previewTemplateCsv()
+            _templateCsvImport.value?.preview
+        } ?: return
+
+        val items = preview.items.ifEmpty { listOf(TemplateItemCatalogInput(text = "")) }
+        val existingEditor = _templateEditor.value
+        if (state.replaceOpenEditorItems && existingEditor != null) {
+            _templateEditor.value = existingEditor.copy(items = items)
+            _actionMessage.value = "Imported ${preview.items.size} checklist items into the template."
+        } else {
+            _templateEditor.value = TemplateEditorState(
+                frequencyHours = if (preview.quantityItemCount > 0) "168" else "24",
+                items = items
+            )
+            _actionMessage.value = "Imported ${preview.summary}. Review name and apparatus type, then save."
+        }
+        _templateCsvImport.value = null
+    }
+
+    fun openHistoryCsvImport() {
+        _historyCsvImport.value = HistoryCsvImportState()
+    }
+
+    fun closeHistoryCsvImport() {
+        _historyCsvImport.value = null
+    }
+
+    fun updateHistoryCsvText(value: String) {
+        _historyCsvImport.value = _historyCsvImport.value?.copy(
+            csvText = value,
+            preview = null,
+            error = null
+        )
+    }
+
+    fun setHistoryCsvFromFile(content: String, fileName: String?) {
+        val current = _historyCsvImport.value ?: HistoryCsvImportState()
+        _historyCsvImport.value = current.copy(
+            csvText = content,
+            fileName = fileName,
+            preview = null,
+            error = null
+        )
+        previewHistoryCsv()
+    }
+
+    fun updateHistoryKeepLocalOnly(value: Boolean) {
+        _historyCsvImport.value = _historyCsvImport.value?.copy(keepLocalOnly = value)
+    }
+
+    fun previewHistoryCsv() {
+        val state = _historyCsvImport.value ?: return
+        viewModelScope.launch {
+            val result = buildHistoryPreview(state.csvText)
+            when (result) {
+                is HistoricalInspectionCsvImporter.Result.Success -> {
+                    _historyCsvImport.value = state.copy(preview = result.preview, error = null)
+                }
+                is HistoricalInspectionCsvImporter.Result.Failure -> {
+                    _historyCsvImport.value = state.copy(preview = null, error = result.message)
+                }
+            }
+        }
+    }
+
+    fun applyHistoryCsvImport() {
+        val state = _historyCsvImport.value ?: return
+        viewModelScope.launch {
+            val preview = state.preview ?: run {
+                when (val result = buildHistoryPreview(state.csvText)) {
+                    is HistoricalInspectionCsvImporter.Result.Success -> result.preview
+                    is HistoricalInspectionCsvImporter.Result.Failure -> {
+                        _historyCsvImport.value = state.copy(error = result.message, preview = null)
+                        return@launch
+                    }
+                }
+            }
+            if (preview.importableCount == 0) {
+                _historyCsvImport.value = state.copy(
+                    preview = preview,
+                    error = "No importable inspections in preview."
+                )
+                return@launch
+            }
+
+            _historyCsvImport.value = state.copy(isImporting = true, preview = preview, error = null)
+            val inspections = HistoricalInspectionCsvImporter.buildInspections(
+                preview = preview,
+                importedAt = currentTimeMillis(),
+                importedByUserId = member.id,
+                keepLocalOnly = state.keepLocalOnly
+            )
+            var saved = 0
+            inspections.forEach { inspection ->
+                if (inspectionRepository.saveInspection(inspection).isSuccess) {
+                    saved++
+                }
+            }
+            if (!state.keepLocalOnly && cloudSyncEnabled && saved > 0) {
+                syncCoordinator.syncDepartment(departmentId)
+            }
+            _historyCsvImport.value = null
+            _actionMessage.value = "Imported $saved historical inspection(s)."
+        }
+    }
+
+    private suspend fun buildHistoryPreview(csvText: String): HistoricalInspectionCsvImporter.Result {
+        val apparatus = apparatusRepository.getApparatusByDepartment(departmentId).first()
+        val templates = inspectionRepository.getTemplatesByDepartment(departmentId).first()
+        val inspections = inspectionRepository.getInspectionsByDepartment(departmentId).first()
+        val members = departmentRepository.getMembersByDepartment(departmentId).getOrDefault(emptyList())
+        return HistoricalInspectionCsvImporter.parse(
+            csvText = csvText,
+            apparatus = apparatus,
+            templates = templates,
+            members = members,
+            existingInspections = inspections,
+            departmentId = departmentId
+        )
     }
 
     fun saveTemplateEditor() {

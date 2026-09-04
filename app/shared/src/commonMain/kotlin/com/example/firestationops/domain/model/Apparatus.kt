@@ -25,6 +25,8 @@ data class Apparatus(
     val vin: String? = null,
     val licensePlate: String? = null,
     val barcode: String? = null,
+    /** Explicit checklist templates for this apparatus; empty = all active templates for [type]. */
+    val assignedTemplateIds: List<String> = emptyList(),
     val createdAt: Long = 0,
     val updatedAt: Long = 0
 )
