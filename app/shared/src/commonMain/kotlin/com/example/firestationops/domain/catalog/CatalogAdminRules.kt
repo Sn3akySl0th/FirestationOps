@@ -1,5 +1,6 @@
 package com.example.firestationops.domain.catalog
 
+import com.example.firestationops.domain.TemplateAssignmentRules
 import com.example.firestationops.domain.model.Apparatus
 import com.example.firestationops.domain.model.InspectionTemplate
 import com.example.firestationops.domain.model.Member
@@ -25,7 +26,8 @@ object CatalogAdminRules {
         input: ApparatusCatalogInput,
         stations: List<Station>,
         existingApparatus: List<Apparatus> = emptyList(),
-        editingApparatusId: String? = null
+        editingApparatusId: String? = null,
+        templates: List<InspectionTemplate> = emptyList()
     ): String? {
         if (input.name.trim().isBlank()) {
             return "Apparatus name is required."
@@ -49,6 +51,11 @@ object CatalogAdminRules {
                 return "Another apparatus already uses this barcode."
             }
         }
+        TemplateAssignmentRules.validateAssignedTemplateIds(
+            assignedTemplateIds = input.assignedTemplateIds,
+            apparatusType = input.type.trim(),
+            templates = templates
+        )?.let { return it }
         return null
     }
 
@@ -65,6 +72,9 @@ object CatalogAdminRules {
         val nonBlankItems = input.items.map { it.text.trim() }.filter { it.isNotEmpty() }
         if (nonBlankItems.isEmpty()) {
             return "Add at least one checklist item."
+        }
+        if (input.items.any { it.expectedQuantity != null && it.expectedQuantity < 0 }) {
+            return "Expected quantity cannot be negative."
         }
         return null
     }

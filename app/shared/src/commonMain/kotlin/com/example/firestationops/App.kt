@@ -248,7 +248,8 @@ fun App(
                                     apparatusRepository = apparatusRepository,
                                     inspectionRepository = inspectionRepository,
                                     catalogAdminRepository = catalogAdminRepository,
-                                    syncCoordinator = syncCoordinator
+                                    syncCoordinator = syncCoordinator,
+                                    departmentRepository = departmentRepository
                                 )
                             }
                             CatalogSettingsScreen(

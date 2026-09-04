@@ -17,13 +17,15 @@ object InspectionCsvExporter {
             add(row("Completed At", formatTimestamp(report.completedAt)))
             add(row("Inspector", report.inspectorName))
             add("")
-            add(row("Category", "Item", "Status", "Severity", "Note"))
+            add(row("Category", "Item", "Status", "Expected Qty", "Actual Qty", "Severity", "Note"))
             report.items.forEach { item ->
                 add(
                     row(
                         item.category.orEmpty(),
                         item.text,
                         item.status.name,
+                        item.expectedQuantity?.toString().orEmpty(),
+                        item.actualQuantity?.toString().orEmpty(),
                         item.severity?.name.orEmpty(),
                         item.note.orEmpty()
                     )

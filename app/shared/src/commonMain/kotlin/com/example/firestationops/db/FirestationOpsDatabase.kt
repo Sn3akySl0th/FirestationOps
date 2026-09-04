@@ -34,7 +34,10 @@ class FirestationOpsDatabase(driver: SqlDriver) {
             status = ApparatusStatus.valueOf(it.status),
             vin = it.vin,
             licensePlate = it.licensePlate,
-            barcode = it.barcode
+            barcode = it.barcode,
+            assignedTemplateIds = runCatching {
+                Json.decodeFromString<List<String>>(it.assignedTemplateIdsJson)
+            }.getOrDefault(emptyList())
         )
     }
 
@@ -49,7 +52,8 @@ class FirestationOpsDatabase(driver: SqlDriver) {
             status = apparatus.status.name,
             vin = apparatus.vin?.trim()?.takeIf { it.isNotEmpty() },
             licensePlate = apparatus.licensePlate?.trim()?.takeIf { it.isNotEmpty() },
-            barcode = apparatus.barcode?.trim()?.takeIf { it.isNotEmpty() }
+            barcode = apparatus.barcode?.trim()?.takeIf { it.isNotEmpty() },
+            assignedTemplateIdsJson = Json.encodeToString(apparatus.assignedTemplateIds)
         )
     }
 
@@ -101,7 +105,18 @@ class FirestationOpsDatabase(driver: SqlDriver) {
             isFinalized = row.isFinalized.toInt() == 1,
             syncStatus = SyncStatus.valueOf(row.syncStatus),
             voidedAt = row.voidedAt,
-            voidedReason = row.voidedReason
+            voidedReason = row.voidedReason,
+            entrySource = runCatching {
+                InspectionEntrySource.valueOf(row.entrySource ?: InspectionEntrySource.FIELD.name)
+            }.getOrDefault(InspectionEntrySource.FIELD),
+            odometerMiles = row.odometerMiles?.toInt(),
+            fluidOil = row.fluidOil,
+            fluidTransmission = row.fluidTransmission,
+            fluidFuel = row.fluidFuel,
+            fluidAntifreeze = row.fluidAntifreeze,
+            fluidPowerSteering = row.fluidPowerSteering,
+            importedAt = row.importedAt,
+            importedByUserId = row.importedByUserId
         )
 
     fun getInspectionsByDepartment(departmentId: String): List<Inspection> =
@@ -128,7 +143,16 @@ class FirestationOpsDatabase(driver: SqlDriver) {
             isFinalized = if (inspection.isFinalized) 1 else 0,
             syncStatus = inspection.syncStatus.name,
             voidedAt = inspection.voidedAt,
-            voidedReason = inspection.voidedReason
+            voidedReason = inspection.voidedReason,
+            entrySource = inspection.entrySource.name,
+            odometerMiles = inspection.odometerMiles?.toLong(),
+            fluidOil = inspection.fluidOil,
+            fluidTransmission = inspection.fluidTransmission,
+            fluidFuel = inspection.fluidFuel,
+            fluidAntifreeze = inspection.fluidAntifreeze,
+            fluidPowerSteering = inspection.fluidPowerSteering,
+            importedAt = inspection.importedAt,
+            importedByUserId = inspection.importedByUserId
         )
     }
 

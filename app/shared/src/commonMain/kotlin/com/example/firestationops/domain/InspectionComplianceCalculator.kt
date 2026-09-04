@@ -20,38 +20,44 @@ object InspectionComplianceCalculator {
         nowMillis: Long,
         dueSoonThresholdHours: Int = DEFAULT_DUE_SOON_THRESHOLD_HOURS
     ): List<ApparatusInspectionStatus> {
-        val templatesByType = templates
-            .filter { it.isActive }
-            .groupBy { it.apparatusType }
-            .mapValues { (_, typeTemplates) -> typeTemplates.maxByOrNull { it.version } }
-
-        val finalizedByApparatus = inspections
-            .filter { it.isFinalized && it.completedAt != null && it.voidedAt == null }
-            .groupBy { it.apparatusId }
-            .mapValues { (_, apparatusInspections) ->
-                apparatusInspections.maxByOrNull { it.completedAt!! }
-            }
-
-        val draftsByApparatus = inspections
-            .filter { !it.isFinalized }
-            .groupBy { it.apparatusId }
-            .mapValues { (_, apparatusInspections) ->
-                apparatusInspections.maxByOrNull { it.startedAt }
-            }
-
         return apparatusList
             .filter { it.status != ApparatusStatus.RESERVE }
-            .mapNotNull { apparatus ->
-                calculate(
-                    apparatus = apparatus,
-                    template = templatesByType[apparatus.type],
-                    latestFinalized = finalizedByApparatus[apparatus.id],
-                    draft = draftsByApparatus[apparatus.id],
-                    nowMillis = nowMillis,
-                    dueSoonThresholdHours = dueSoonThresholdHours
-                )
+            .flatMap { apparatus ->
+                val eligible = TemplateAssignmentRules.resolveEligibleTemplates(apparatus, templates)
+                if (eligible.isEmpty()) {
+                    listOfNotNull(
+                        calculate(
+                            apparatus = apparatus,
+                            template = null,
+                            latestFinalized = latestFinalized(inspections, apparatus.id, templateId = null),
+                            draft = latestDraft(inspections, apparatus.id, templateId = null),
+                            nowMillis = nowMillis,
+                            dueSoonThresholdHours = dueSoonThresholdHours
+                        )
+                    )
+                } else {
+                    eligible.mapNotNull { template ->
+                        calculate(
+                            apparatus = apparatus,
+                            template = template,
+                            latestFinalized = latestFinalized(inspections, apparatus.id, template.id),
+                            draft = latestDraft(inspections, apparatus.id, template.id),
+                            nowMillis = nowMillis,
+                            dueSoonThresholdHours = dueSoonThresholdHours
+                        )
+                    }
+                }
             }
     }
+
+    /**
+     * Picks the most urgent compliance row when an apparatus has multiple assigned templates.
+     */
+    fun worstStatus(statuses: List<ApparatusInspectionStatus>): ApparatusInspectionStatus? =
+        statuses.minWithOrNull(
+            compareBy<ApparatusInspectionStatus> { urgencyRank(it.status) }
+                .thenByDescending { it.daysOverdue }
+        )
 
     fun calculate(
         apparatus: Apparatus,
@@ -118,4 +124,41 @@ object InspectionComplianceCalculator {
             daysOverdue = daysOverdue
         )
     }
+
+    private fun latestFinalized(
+        inspections: List<Inspection>,
+        apparatusId: String,
+        templateId: String?
+    ): Inspection? =
+        inspections
+            .filter {
+                it.apparatusId == apparatusId &&
+                    it.isFinalized &&
+                    it.completedAt != null &&
+                    it.voidedAt == null &&
+                    (templateId == null || it.templateId == templateId)
+            }
+            .maxByOrNull { it.completedAt!! }
+
+    private fun latestDraft(
+        inspections: List<Inspection>,
+        apparatusId: String,
+        templateId: String?
+    ): Inspection? =
+        inspections
+            .filter {
+                it.apparatusId == apparatusId &&
+                    !it.isFinalized &&
+                    (templateId == null || it.templateId == templateId)
+            }
+            .maxByOrNull { it.startedAt }
+
+    private fun urgencyRank(status: InspectionComplianceStatus): Int =
+        when (status) {
+            InspectionComplianceStatus.OVERDUE -> 0
+            InspectionComplianceStatus.NEVER_INSPECTED -> 1
+            InspectionComplianceStatus.IN_PROGRESS -> 2
+            InspectionComplianceStatus.DUE_SOON -> 3
+            InspectionComplianceStatus.CURRENT -> 4
+        }
 }

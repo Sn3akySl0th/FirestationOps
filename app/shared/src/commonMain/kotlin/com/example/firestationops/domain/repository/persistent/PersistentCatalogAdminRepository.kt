@@ -65,19 +65,23 @@ class PersistentCatalogAdminRepository(
             .filter { it.departmentId == actingMember.departmentId }
         val departmentApparatus = database.getAllApparatus()
             .filter { it.departmentId == actingMember.departmentId }
+        val departmentTemplates = database.getAllTemplates()
+            .filter { it.departmentId == actingMember.departmentId }
         val normalized = input.copy(
             name = input.name.trim(),
             type = input.type.trim(),
             radioName = input.radioName.trim(),
             vin = input.vin?.trim()?.takeIf { it.isNotEmpty() },
             licensePlate = input.licensePlate?.trim()?.takeIf { it.isNotEmpty() },
-            barcode = input.barcode?.trim()?.takeIf { it.isNotEmpty() }
+            barcode = input.barcode?.trim()?.takeIf { it.isNotEmpty() },
+            assignedTemplateIds = input.assignedTemplateIds.distinct()
         )
         CatalogAdminRules.validateApparatusInput(
             input = normalized,
             stations = stations,
             existingApparatus = departmentApparatus,
-            editingApparatusId = editingApparatusId
+            editingApparatusId = editingApparatusId,
+            templates = departmentTemplates
         )?.let { error(it) }
 
         val now = currentTimeMillis()
@@ -100,6 +104,7 @@ class PersistentCatalogAdminRepository(
             vin = normalized.vin,
             licensePlate = normalized.licensePlate,
             barcode = normalized.barcode,
+            assignedTemplateIds = normalized.assignedTemplateIds,
             createdAt = existing?.createdAt ?: now,
             updatedAt = now
         )
@@ -144,9 +149,11 @@ class PersistentCatalogAdminRepository(
                 InspectionTemplateItem(
                     id = item.id ?: "item-${randomUUID()}",
                     text = item.text,
+                    description = item.description,
                     category = item.category,
                     isRequired = item.isRequired,
-                    requiresNoteOnFail = item.requiresNoteOnFail
+                    requiresNoteOnFail = item.requiresNoteOnFail,
+                    expectedQuantity = item.expectedQuantity
                 )
             }
 

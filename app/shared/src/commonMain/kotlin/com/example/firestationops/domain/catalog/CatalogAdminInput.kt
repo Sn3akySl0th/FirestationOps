@@ -15,7 +15,8 @@ data class ApparatusCatalogInput(
     val status: ApparatusStatus = ApparatusStatus.IN_SERVICE,
     val vin: String? = null,
     val licensePlate: String? = null,
-    val barcode: String? = null
+    val barcode: String? = null,
+    val assignedTemplateIds: List<String> = emptyList()
 )
 
 data class TemplateItemCatalogInput(
@@ -23,7 +24,9 @@ data class TemplateItemCatalogInput(
     val text: String,
     val category: String? = null,
     val isRequired: Boolean = true,
-    val requiresNoteOnFail: Boolean = true
+    val requiresNoteOnFail: Boolean = true,
+    val expectedQuantity: Int? = null,
+    val description: String? = null
 )
 
 data class TemplateCatalogInput(
